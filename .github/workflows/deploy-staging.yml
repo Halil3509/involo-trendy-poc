@@ -37,6 +37,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::013049518751:role/github-actions-trendy-poc-staging-image-pusher
           aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -82,6 +83,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::013049518751:role/github-actions-trendy-poc-staging-deployer
           aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true
 
       - name: Deploy via SSM
         run: |
