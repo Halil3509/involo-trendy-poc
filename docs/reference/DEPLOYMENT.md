@@ -84,7 +84,7 @@ Meta app credentials (`INVOLO_INSTAGRAM_APP_ID`, `INVOLO_INSTAGRAM_APP_SECRET`, 
 | ECR repository | `involo-trendy-poc/backend` in `eu-west-3` |
 | ALB | `involo-trendy-poc-staging-lb` (default VPC, `eu-west-3a/b/c`) |
 | ALB security group | `involo-trendy-poc-staging-alb-sg` (inbound 80/443 from `0.0.0.0/0`) |
-| Target group | `involo-trendy-poc-staging-backend-tg` → `i-0154019e4120737bb:8021` |
+| Target group | `involo-trendy-poc-stg-backend-tg` → `i-0154019e4120737bb:8021` |
 | Health check | `/health/live` on `8021` |
 | ACM certificate | `arn:aws:acm:eu-west-3:013049518751:certificate/a6d827a2-40c5-435a-a5ef-8fb3cc88c89d` (`*.involo.co`) |
 | DNS record | `trendy-staging.involo.co` CNAME → ALB DNS name |

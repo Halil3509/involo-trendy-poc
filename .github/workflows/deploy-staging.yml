@@ -73,7 +73,6 @@ jobs:
     name: Deploy to staging EC2
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment: staging
     permissions:
       id-token: write
       contents: read
@@ -112,13 +111,3 @@ jobs:
           done
           echo "SSM command did not finish in time"
           exit 1
-
-      - name: Tag deploy
-        env:
-          IMAGE_SHA: ${{ needs.build-and-push.outputs.image_sha }}
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          DATE=$(date -u +%Y%m%d-%H%M%S)
-          git tag -a "deploy/staging/${DATE}-${IMAGE_SHA}" -m "Staging deploy ${IMAGE_SHA}"
-          git push origin "deploy/staging/${DATE}-${IMAGE_SHA}"
