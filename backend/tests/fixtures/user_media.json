@@ -1,0 +1,35 @@
+{
+  "account": {
+    "id": "fixture-instagram-user",
+    "username": "fixture_creator",
+    "follower_count": 25000
+  },
+  "media": [
+    {
+      "id": "3001",
+      "permalink": "https://www.instagram.com/reel/Fixture_A1/",
+      "caption": "A deterministic travel fixture caption",
+      "media_product_type": "REELS",
+      "media_url": "https://example.invalid/video-a1.mp4",
+      "taken_at": "2026-07-10T00:00:00Z",
+      "like_count": 12000,
+      "comment_count": 340,
+      "views": 500000,
+      "shares": 800,
+      "insights_available": true
+    },
+    {
+      "id": "3002",
+      "permalink": "https://www.instagram.com/reel/Fixture_B2/",
+      "caption": "A quick food idea fixture caption",
+      "media_product_type": "REELS",
+      "media_url": "https://example.invalid/video-b2.mp4",
+      "taken_at": "2026-07-08T00:00:00Z",
+      "like_count": 900,
+      "comment_count": 42,
+      "views": 18000,
+      "shares": 75,
+      "insights_available": true
+    }
+  ]
+}

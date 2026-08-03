@@ -1,0 +1,2 @@
+# Markdown uses trailing two spaces to force a line break inside a paragraph.
+*.md whitespace=-blank-at-eol

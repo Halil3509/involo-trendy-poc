@@ -1,0 +1,16 @@
+[
+  {
+    "keyword": "travel",
+    "url": "https://www.instagram.com/reel/Fixture_A1/?utm_source=test",
+    "caption": "A deterministic travel fixture",
+    "author": "fixture_creator",
+    "thumbnail_url": "https://example.invalid/travel.jpg",
+    "metadata": {"likes": 42}
+  },
+  {
+    "keyword": "food",
+    "url": "/p/Fixture_B2/",
+    "caption": "A deterministic food fixture",
+    "author": "fixture_creator"
+  }
+]

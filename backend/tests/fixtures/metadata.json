@@ -1,0 +1,30 @@
+[
+  {
+    "shortcode": "Fixture_A1",
+    "media_id": "3001",
+    "owner_username": "fixture_creator",
+    "owner_follower_count": 25000,
+    "like_count": 12000,
+    "comment_count": 340,
+    "view_count": 500000,
+    "share_count": 800,
+    "video_duration": 34.0,
+    "caption_text": "A deterministic travel fixture caption",
+    "taken_at": "2026-07-10T00:00:00Z",
+    "video_url": "https://example.invalid/video-a1.mp4"
+  },
+  {
+    "shortcode": "Fixture_B2",
+    "media_id": "3002",
+    "owner_username": "fixture_creator",
+    "owner_follower_count": 8000,
+    "like_count": 40,
+    "comment_count": 2,
+    "view_count": 900,
+    "share_count": 1,
+    "video_duration": 12.0,
+    "caption_text": "A low-engagement food fixture caption",
+    "taken_at": "2026-05-01T00:00:00Z",
+    "video_url": "https://example.invalid/video-b2.mp4"
+  }
+]

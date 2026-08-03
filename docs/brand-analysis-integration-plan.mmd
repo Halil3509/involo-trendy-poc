@@ -1,0 +1,102 @@
+%% Instagram Marka Analizi — Entegrasyon Planı (PoC)
+%% Mevcut Involo altyapısına (FastAPI + Celery + MongoDB + Bedrock + Next.js)
+%% sadece admin için "marka referans analizi" modülü eklenir.
+%% Her faz, önce backend (API + Celery + servis/provider), sonra frontend,
+%% en son test/ doğrulama adımlarını gösterir.
+
+flowchart TB
+    subgraph MEVCUT["🧱 Mevcut Altyapı (değiştirilmeden kullanılır)"]
+        M1[FastAPI + Cookie auth + Admin RBAC]
+        M2[Celery + Redis broker/backend]
+        M3[MongoDB job_runs + yeni collection]
+        M4[Bedrock Nova Pro / Nova Lite]
+        M5[S3/MinIO MediaProvider]
+        M6[Instagram Graph OAuth / Playwright Scraper]
+        M7[Next.js 16 App Router + Tailwind]
+    end
+
+    subgraph FAZ1["Faz 1 — Veri modeli + API iskeleti"]
+        F1_A["backend/app/schemas/brand_analysis.py<br/>BrandAnalysisRequest, BrandAnalysisJob, BrandAnalysisReport"]
+        F1_B["backend/app/api/routes/admin_brand_analysis.py<br/>POST /admin/brand-analysis/runs<br/>GET /admin/brand-analysis/runs/{id}<br/>GET /admin/brand-analysis/reports/{id}"]
+        F1_C["backend/app/workers/tasks/brand_analysis.py<br/>analyze_brand Celery task iskeleti"]
+        F1_D["backend/app/services/brand_analysis.py<br/>BrandAnalysisService (boş runner)"]
+        F1_E["frontend/src/lib/types.ts<br/>BrandAnalysisJob, BrandAnalysisReport tipi"]
+        F1_F["frontend/src/lib/api.ts<br/>startBrandAnalysis, getBrandAnalysisJob, getBrandAnalysisReport"]
+    end
+
+    subgraph FAZ2["Faz 2 — Veri toplama (username/URL → postlar)"]
+        F2_A["Mevcut Meta/Graph OAuth veya scraper ile<br/>hedef hesabın son N gönderisini çek"]
+        F2_B["BrandAnalysisService.fetch_posts()<br/>caption, permalink, like_count, media_url, media_type"]
+        F2_C["MongoDB brand_analysis_jobs<br/>state: queued → fetching → fetched"]
+        F2_D["WebSocket/JobLogBus ile ilerleme logu"]
+    end
+
+    subgraph FAZ3["Faz 3 — Medya indirme + Görsel/Caption analizi"]
+        F3_A["MediaProvider.ingest() ile her post medyasını S3'e al"]
+        F3_B["VisionProvider.analyze() ile görsel/reels kare analizi"]
+        F3_C["Nova Pro / Nova Lite ile caption analizi<br/>ton, hook, CTA, hashtag, emoji"]
+        F3_D["MongoDB brand_analysis_posts<br/>post başına: metadata, media_s3_key, visual_analysis, caption_analysis"]
+    end
+
+    subgraph FAZ4["Faz 4 — Rapor üretimi (Markdown)"]
+        F4_A["Bedrock Nova Pro ile tüm post analizlerini birleştir"]
+        F4_B["Markdown rapor üret<br/>Hesap genel görünümü → içerik stratejisi → engagement → öneriler"]
+        F4_C["S3'e kaydet: reports/brand/{job_id}/report.md"]
+        F4_D["MongoDB brand_analysis_jobs.report_s3_key + state: completed"]
+    end
+
+    subgraph FAZ5["Faz 5 — Admin Chat UI"]
+        F5_A["frontend/src/app/admin/brand-analysis/page.tsx<br/>Yeni admin sayfası"]
+        F5_B["frontend/src/components/brand-analysis-chat.tsx<br/>URL/Username input + chat baloncukları"]
+        F5_C["frontend/src/components/brand-analysis-report.tsx<br/>Markdown renderer ile rapor görüntüleme"]
+        F5_D["app-shell.tsx'ye /admin/brand-analysis linki ekle"]
+    end
+
+    subgraph FAZ6["Faz 6 — Test + Cilalama"]
+        F6_A["backend/tests/test_brand_analysis.py<br/> başarı, validasyon, yetki, fake provider"]
+        F6_B["frontend/src/components/brand-analysis-chat.test.tsx<br/> loading, hata, rapor gösterim"]
+        F6_C["ruff + mypy + pytest + lint + typecheck + build"]
+        F6_D[".env.example + config güncellemeleri"]
+    end
+
+    MEVCUT --> FAZ1
+    FAZ1 --> FAZ2
+    FAZ2 --> FAZ3
+    FAZ3 --> FAZ4
+    FAZ4 --> FAZ5
+    FAZ5 --> FAZ6
+
+    %% Detay bağlantılar
+    F1_A --> F1_B
+    F1_B --> F1_C
+    F1_C --> F1_D
+    F1_B -.-> F1_E
+    F1_E --> F1_F
+
+    F2_A --> F2_B
+    F2_B --> F2_C
+    F2_C --> F2_D
+
+    F3_A --> F3_B
+    F3_B --> F3_C
+    F3_C --> F3_D
+
+    F4_A --> F4_B
+    F4_B --> F4_C
+    F4_C --> F4_D
+
+    F5_A --> F5_B
+    F5_B --> F5_C
+    F5_A --> F5_D
+
+    F6_A --> F6_C
+    F6_B --> F6_C
+    F6_C --> F6_D
+
+    style MEVCUT fill:#e2e8f0,stroke:#475569,stroke-width:2px
+    style FAZ1 fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    style FAZ2 fill:#dcfce7,stroke:#16a34a,stroke-width:2px
+    style FAZ3 fill:#fef9c3,stroke:#ca8a04,stroke-width:2px
+    style FAZ4 fill:#f3e8ff,stroke:#9333ea,stroke-width:2px
+    style FAZ5 fill:#ffe4e6,stroke:#e11d48,stroke-width:2px
+    style FAZ6 fill:#ccfbf1,stroke:#0d9488,stroke-width:2px

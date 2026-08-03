@@ -1,0 +1,49 @@
+{
+  "creators": [
+    {
+      "username": "fixture_creator",
+      "display_name": "Fixture Creator",
+      "bio": "Travel and food content from Istanbul",
+      "avatar_url": "https://example.invalid/avatar.jpg",
+      "follower_count": 42000,
+      "following_count": 350,
+      "media_count": 210,
+      "is_private": false,
+      "posts": [
+        {
+          "shortcode": "CREATOR_A1",
+          "caption": "Hidden breakfast spots in Kadikoy #istanbul #food",
+          "media_type": "REELS",
+          "taken_at": "2026-07-27T09:00:00+00:00",
+          "like_count": 5200,
+          "comment_count": 210,
+          "view_count": 120000,
+          "media_url": "https://example.invalid/reel-a1.mp4",
+          "thumbnail_url": "https://example.invalid/reel-a1.jpg"
+        },
+        {
+          "shortcode": "CREATOR_B2",
+          "caption": "Sunset over the Bosphorus travel vlog",
+          "media_type": "REELS",
+          "taken_at": "2026-07-25T18:30:00+00:00",
+          "like_count": 3100,
+          "comment_count": 95,
+          "view_count": 80000,
+          "media_url": "https://example.invalid/reel-b2.mp4",
+          "thumbnail_url": "https://example.invalid/reel-b2.jpg"
+        },
+        {
+          "shortcode": "CREATOR_C3",
+          "caption": "Street food tour part 4",
+          "media_type": "IMAGE",
+          "taken_at": "2026-07-20T12:00:00+00:00",
+          "like_count": 1800,
+          "comment_count": 60,
+          "view_count": 0,
+          "media_url": "https://example.invalid/photo-c3.jpg",
+          "thumbnail_url": "https://example.invalid/photo-c3.jpg"
+        }
+      ]
+    }
+  ]
+}

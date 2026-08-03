@@ -1,0 +1,50 @@
+# Secrets and environment files
+.env
+.env.local
+.env.bak
+.env.bak.*
+.env.test-run-backup
+frontend/.env.local
+
+# Logs and runtime pid files
+*.log
+logs/
+.run.pids
+.run*.pid
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+
+# Node artifacts
+node_modules/
+.next/
+coverage/
+
+# Playwright/test artifacts
+.playwright/
+playwright-report/
+test-results/
+
+# Local data and sessions
+data/
+instagram-session/
+*.storage-state.json
+
+# Editor / agent config
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+.devin/
+
+# Runtime artifacts and backups
+backend/celerybeat-schedule.db
+*.backup
+*.bak
