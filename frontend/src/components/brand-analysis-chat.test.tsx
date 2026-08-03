@@ -46,6 +46,7 @@ const mockJob = (state: string, id = "job-1") => ({
 describe("BrandAnalysisChat", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.clearAllMocks();
     vi.mocked(api.startBrandAnalysis).mockResolvedValue(mockJob("queued"));
     vi.mocked(api.getBrandAnalysisJob).mockResolvedValue(mockJob("succeeded"));
     vi.mocked(api.getBrandAnalysisReport).mockResolvedValue(mockReport);
@@ -89,6 +90,58 @@ describe("BrandAnalysisChat", () => {
     expect(screen.getByRole("heading", { name: "Analiz durumu" })).toBeInTheDocument();
     expect(screen.getByText(/@markaadi için ilerleme/)).toBeInTheDocument();
     expect(screen.getByText("Sıraya alındı")).toBeInTheDocument();
+  });
+
+  it("accepts a full Instagram profile URL", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<BrandAnalysisChat />);
+
+    await user.type(
+      screen.getByLabelText("Instagram kullanıcı adı veya URL"),
+      "https://www.instagram.com/involo.tr",
+    );
+    await user.click(screen.getByRole("button", { name: "Analiz et" }));
+
+    await waitFor(() =>
+      expect(api.startBrandAnalysis).toHaveBeenCalledWith({
+        username_or_url: "https://www.instagram.com/involo.tr",
+        max_posts: 10,
+      }),
+    );
+    expect(screen.getByText("queued")).toBeInTheDocument();
+  });
+
+  it("accepts an @handle", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<BrandAnalysisChat />);
+
+    await user.type(
+      screen.getByLabelText("Instagram kullanıcı adı veya URL"),
+      "@involo.tr",
+    );
+    await user.click(screen.getByRole("button", { name: "Analiz et" }));
+
+    await waitFor(() =>
+      expect(api.startBrandAnalysis).toHaveBeenCalledWith({
+        username_or_url: "@involo.tr",
+        max_posts: 10,
+      }),
+    );
+    expect(screen.getByText("queued")).toBeInTheDocument();
+  });
+
+  it("shows validation error for an invalid Instagram URL", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<BrandAnalysisChat />);
+
+    await user.type(
+      screen.getByLabelText("Instagram kullanıcı adı veya URL"),
+      "https://not-instagram.com/involo.tr",
+    );
+    await user.click(screen.getByRole("button", { name: "Analiz et" }));
+
+    expect(await screen.findByText("Enter a valid Instagram username or profile URL.")).toBeInTheDocument();
+    expect(api.startBrandAnalysis).not.toHaveBeenCalled();
   });
 
   it("displays error when start request fails", async () => {

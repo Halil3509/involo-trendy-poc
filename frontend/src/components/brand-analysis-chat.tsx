@@ -133,14 +133,49 @@ export function BrandAnalysisChat() {
 
   usePolling(loadJob, isRunActive(job));
 
+  function extractUsername(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    let candidate = trimmed.replace(/^@/, "");
+    const isUrlLike =
+      /^https?:\/\//i.test(candidate) ||
+      candidate.toLowerCase().endsWith("instagram.com") ||
+      candidate.toLowerCase().includes("instagram.com/");
+
+    if (isUrlLike) {
+      try {
+        const normalized = /^https?:\/\//i.test(candidate)
+          ? candidate
+          : `https://${candidate}`;
+        const parsed = new URL(normalized);
+        const host = parsed.hostname.toLowerCase();
+        if (host !== "instagram.com" && !host.endsWith(".instagram.com")) {
+          return null;
+        }
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        candidate = parts[0] ?? "";
+      } catch {
+        return null;
+      }
+    }
+
+    candidate = candidate.replace(/\/$/, "").toLowerCase();
+    if (
+      !candidate ||
+      !/^[a-z0-9_.]{1,30}$/.test(candidate) ||
+      candidate.startsWith(".") ||
+      candidate.endsWith(".") ||
+      candidate.includes("..")
+    ) {
+      return null;
+    }
+    return candidate;
+  }
+
   function validateInput(): string | null {
-    const value = url.trim();
-    if (!value) return "Enter an Instagram username or URL.";
-    const username = value
-      .replace(/^https?:\/\/([\w.]+\/)?instagram\.com\//, "")
-      .replace(/^@/, "")
-      .replace(/\/$/, "");
-    if (!username || !/^[\w.]+$/.test(username)) {
+    const username = extractUsername(url);
+    if (!username) {
       return "Enter a valid Instagram username or profile URL.";
     }
     if (maxPosts < 1 || maxPosts > 30) {
