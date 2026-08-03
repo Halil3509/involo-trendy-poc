@@ -1,0 +1,22 @@
+title = "Involo gitleaks config"
+
+[extend]
+# Use the default gitleaks rules as the baseline
+useDefault = true
+
+[allowlist]
+paths = [
+  '''\.env.*''',
+  '''frontend/\.env\.local''',
+  '''backend/\.state/''',
+  '''logs/''',
+  '''data/''',
+  '''\.venv/''',
+  '''node_modules/''',
+  '''\.next/''',
+  '''\.git/''',
+  '''\.windsurf/''',
+  '''\.devin/''',
+  '''docs/''',
+  '''\.(md|rst)$''',
+]

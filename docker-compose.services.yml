@@ -49,48 +49,7 @@ services:
       timeout: 3s
       retries: 20
 
-  minio:
-    image: quay.io/minio/minio:latest
-    restart: unless-stopped
-    command: server /data --address ":8026" --console-address ":8027"
-    environment:
-      MINIO_ROOT_USER: ${INVOLO_TRANSCRIBE_S3_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${INVOLO_TRANSCRIBE_S3_SECRET_ACCESS_KEY:-minioadmin}
-    ports:
-      - "8026:8026"
-      - "8027:8027"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8026/minio/health/live"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  minio-init:
-    image: quay.io/minio/mc:latest
-    restart: "no"
-    profiles: ["init"]
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${INVOLO_TRANSCRIBE_S3_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${INVOLO_TRANSCRIBE_S3_SECRET_ACCESS_KEY:-minioadmin}
-      MINIO_BUCKET: ${INVOLO_TRANSCRIBE_S3_BUCKET:-involo-transcribe}
-      MINIO_MEDIA_BUCKET: ${INVOLO_MEDIA_S3_BUCKET:-involo-media}
-      MINIO_EMBEDDING_MEDIA_BUCKET: ${INVOLO_EMBEDDING_MEDIA_S3_BUCKET:-involo-media}
-    entrypoint:
-      - /bin/sh
-      - -c
-      - >
-        mc alias set local http://minio:8026 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        && mc mb --ignore-existing "local/$$MINIO_BUCKET"
-        && mc mb --ignore-existing "local/$$MINIO_MEDIA_BUCKET"
-        && mc mb --ignore-existing "local/$$MINIO_EMBEDDING_MEDIA_BUCKET"
-
 volumes:
   mongodb_data:
   redis_data:
   qdrant_data:
-  minio_data:

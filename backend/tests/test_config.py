@@ -106,6 +106,42 @@ def test_production_rejects_embedding_bucket_region_mismatch() -> None:
         )
 
 
+def test_staging_accepts_without_meta_trend_tokens() -> None:
+    """Staging mirrors production validation but does not require runtime Meta trend tokens."""
+    settings = Settings(
+        environment="staging",
+        jwt_secret="x" * 32,
+        instagram_token_encryption_key="y" * 32,
+        instagram_app_id="app",
+        instagram_app_secret="secret",
+        media_s3_bucket="media",
+        media_s3_region="us-east-1",
+        bedrock_generation_region="us-east-1",
+        embedding_media_s3_bucket="embedding-media",
+        embedding_media_s3_region="us-east-1",
+        bedrock_embedding_region="us-east-1",
+        transcribe_s3_bucket="transcribe",
+    )
+    assert settings.environment == "staging"
+
+
+def test_staging_rejects_default_jwt_secret() -> None:
+    with pytest.raises(ValidationError, match="non-default JWT secret"):
+        Settings(
+            environment="staging",
+            instagram_token_encryption_key="y" * 32,
+            instagram_app_id="app",
+            instagram_app_secret="secret",
+            media_s3_bucket="media",
+            media_s3_region="us-east-1",
+            bedrock_generation_region="us-east-1",
+            embedding_media_s3_bucket="embedding-media",
+            embedding_media_s3_region="us-east-1",
+            bedrock_embedding_region="us-east-1",
+            transcribe_s3_bucket="transcribe",
+        )
+
+
 def test_empty_s3_endpoint_urls_are_normalized_to_none() -> None:
     settings = Settings(
         transcribe_s3_endpoint_url="",

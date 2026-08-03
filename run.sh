@@ -72,11 +72,8 @@ mkdir -p logs
 rm -f .run.pids
 kill_local_services
 
-echo "Starting third-party infrastructure (MongoDB, Redis, Qdrant, MinIO)..."
+echo "Starting third-party infrastructure (MongoDB, Redis, Qdrant)..."
 docker compose -f docker-compose.infra.yml -p involo up -d --wait
-
-echo "Creating MinIO buckets..."
-docker compose -f docker-compose.infra.yml -p involo --profile init run --rm minio-init
 
 cleanup() {
     echo

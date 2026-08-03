@@ -27,7 +27,7 @@ class Settings(BaseSettings):
             return (init_settings,)
         return (init_settings, env_settings, dotenv_settings, file_secret_settings)
 
-    environment: Literal["development", "test", "production"] = "development"
+    environment: Literal["development", "test", "production", "staging"] = "development"
     api_prefix: str = "/api/v1"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:8020"]
 
@@ -167,6 +167,7 @@ class Settings(BaseSettings):
     brand_analysis_public_fallback_enabled: bool = False
     brand_analysis_provider: Literal["aws", "fake"] = "aws"
     brand_analysis_concurrency: int = Field(default=3, ge=1, le=10)
+    brand_analysis_post_timeout_seconds: float = Field(default=180.0, ge=10.0, le=1800.0)
     brand_analysis_max_report_posts: int = Field(default=30, ge=1, le=100)
     bedrock_enable_prompt_cache: bool = False
     brand_analysis_report_model_id: str = Field(default="")
@@ -353,11 +354,11 @@ class Settings(BaseSettings):
         if self.cookie_samesite == "none" and not self.cookie_secure:
             raise ValueError("SameSite=None cookies must be secure")
         if (
-            self.environment == "production"
+            self.environment in ("production", "staging")
             and self.jwt_secret.get_secret_value() == "development-only-change-me-32-chars"
         ):
-            raise ValueError("production requires a non-default JWT secret")
-        if self.environment == "production":
+            raise ValueError("production and staging require a non-default JWT secret")
+        if self.environment in ("production", "staging"):
             if (
                 self.instagram_token_encryption_key.get_secret_value()
                 == "development-only-token-encryption-key"
@@ -365,7 +366,7 @@ class Settings(BaseSettings):
                 raise ValueError("production requires a non-default token encryption key")
             if not (self.instagram_app_id and self.instagram_app_secret):
                 raise ValueError("Graph profiling requires Instagram app credentials")
-        if self.environment == "production":
+        if self.environment in ("production", "staging"):
             if not self.provider_readiness_probes_enabled:
                 raise ValueError("production requires live provider readiness probes")
             if not self.media_s3_bucket:
@@ -417,12 +418,13 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "production requires official Meta app credentials"
                 )
-            if not (
-                self.meta_trend_access_token and self.meta_instagram_business_account_id
-            ):
-                raise ValueError(
-                    "production requires official Meta trend access token and account id"
-                )
+            if self.environment == "production":
+                if not (
+                    self.meta_trend_access_token and self.meta_instagram_business_account_id
+                ):
+                    raise ValueError(
+                        "production requires official Meta trend access token and account id"
+                    )
         if self.recommendation_retrieval_pool < self.recommendation_retrieval_top_k:
             raise ValueError("recommendation retrieval pool must be at least top-k")
         if self.vector_fusion_text_weight + self.vector_fusion_media_weight <= 0:

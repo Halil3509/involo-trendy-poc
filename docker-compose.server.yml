@@ -5,12 +5,7 @@ include:
 
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      args:
-        INSTALL_PLAYWRIGHT: "true"
-    image: involo-backend:latest
+    image: ${BACKEND_IMAGE_URI}:${BACKEND_IMAGE_TAG}
     container_name: involo-backend
     ports:
       - "8021:8021"
@@ -39,7 +34,7 @@ services:
       start_period: 30s
 
   worker:
-    image: involo-backend:latest
+    image: ${BACKEND_IMAGE_URI}:${BACKEND_IMAGE_TAG}
     container_name: involo-worker
     command: celery -A app.tasks worker --loglevel=INFO --pool=solo
     env_file:
@@ -56,7 +51,7 @@ services:
       - ./logs:/app/logs
 
   beat:
-    image: involo-backend:latest
+    image: ${BACKEND_IMAGE_URI}:${BACKEND_IMAGE_TAG}
     container_name: involo-beat
     command: celery -A app.tasks beat --loglevel=INFO --pidfile=/tmp/celerybeat.pid
     env_file:
@@ -64,36 +59,10 @@ services:
     environment:
       INVOLO_MONGO_URI: mongodb://mongodb:8022
       INVOLO_REDIS_URL: redis://redis:8028/0
+      INVOLO_QDRANT_URL: http://qdrant:8024
     depends_on:
       backend:
         condition: service_healthy
     volumes:
       - ./backend/.state:/app/.state
       - ./logs:/app/logs
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8021}
-    container_name: involo-frontend
-    ports:
-      - "8020:8020"
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      PORT: 8020
-      HOSTNAME: 0.0.0.0
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test:
-        ["CMD", "node", "-e",
-         "require('http').get('http://localhost:8020/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1));"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
