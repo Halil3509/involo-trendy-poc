@@ -29,14 +29,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const links = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/recommendations", label: "Recommendations" },
-    { href: "/creators", label: "Creators" },
+    { href: "/lab", label: "Invo Lab" },
     { href: "/profile", label: "My profile" },
     ...(isAdmin
       ? [
           { href: "/admin", label: "Overview" },
           { href: "/admin/scraper", label: "Scraper control" },
           { href: "/admin/profiling", label: "Profiling" },
-          { href: "/admin/brand-analysis", label: "Brand analysis" },
         ]
       : []),
   ];

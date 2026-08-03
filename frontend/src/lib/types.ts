@@ -427,11 +427,33 @@ export type BrandAnalysisReport = {
   strategic_brief?: BrandAnalysisStrategicBrief | null;
 };
 
+export type JobProgressKeyword = {
+  name: string;
+  discovered: number;
+  status: string;
+};
+
+export type JobProgress = {
+  current_keyword: string | null;
+  current_step: string;
+  keywords: JobProgressKeyword[];
+  total_discovered: number;
+  total_target: number;
+};
+
+export type JobIntervention = {
+  prompt: string;
+  fields: string[];
+  requested_at: string;
+};
+
 export type Job = {
   id: string;
   kind: JobKind | string;
   state: JobState;
   counters: Record<string, number>;
+  progress?: JobProgress | null;
+  intervention?: JobIntervention | null;
   error?: string | null;
   created_at?: string;
   started_at?: string | null;

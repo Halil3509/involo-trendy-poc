@@ -373,13 +373,109 @@ class BrandAnalysisService:
         "science": ["bilim", "araştırma", "klinik", "etkin", "sonuç", "teknoloji", "formula"],
         "ritual": ["ritüel", "rutin", "adım", "süreç", "uygula", "uygulama", "routine"],
         "founder_authority": ["tata", "kurucu", "ben", "biz", "founder", "harper", "kendi"],
-        "provenance": ["vermont", "çiftlik", "üretim", "yerel", "farm", "source", "origin"],
+        "provenance": ["vermont", "çiftlik", "farm", "yerel", "source", "origin", "köken"],
         "sustainability": ["sürdürülebilir", "geri dönüşüm", "doğa dostu", "eco", "sustainable"],
         "sensory": ["hisset", "dokun", "kokusu", "doku", "texture", "scent", "feel", "sensorial"],
         "luxury": ["lüks", "premium", "kalite", "işçilik", "luxury", "elegant", "sophisticated"],
         "community": ["siz", "topluluk", "birlikte", "community", "together", "join"],
         "aspiration": ["hayal", "yaşam tarzı", "lifestyle", "aspirational", "dream", "glow"],
     }
+
+    # Domain inference used to avoid forcing skincare/cosmetic language onto SaaS,
+    # education, travel, fashion, or other non-beauty accounts.
+    _DOMAIN_KEYWORDS: dict[str, list[str]] = {
+        "saas_tech": [
+            "yapay zeka", "ai", "yazılım", "software", "app", "uygulama", "platform",
+            "dashboard", "panel", "otomasyon", "automation", "üretkenlik", "productivity",
+            "içerik stratejisi", "sosyal medya", "büyüme", "growth", "analytics", "veri",
+            "api", "code", "kod", "tool", "saas", "b2b", "creator", "influencer",
+            "marka yönetimi", "instagram", "linkedin", "post", "schedule", "plan",
+            "takvim", "yönetim", "metrik",
+        ],
+        "education": [
+            "öğren", "eğitim", "ders", "course", "tutorial", "ipucu", "tips", "nasıl",
+            "how to", "rehber", "guide", "adım", "step", "dönüşüm", "learn", "bilgi",
+        ],
+        "physical_beauty": [
+            "cilt", "skin", "krem", "cream", "serum", "makyaj", "makeup", "bakım", "care",
+            "doku", "texture", "swatch", "spf", "nem", "hydration", "glow", "akne",
+            "yaşlanma", "güzellik", "beauty", "skincare", "cosmetic", "kozmetik", "ürün",
+            "before", "after", "packshot", "bottle", "jar", "tube",
+        ],
+        "fashion": [
+            "outfit", "kombin", "giyim", "moda", "fashion", "stil", "style", "look",
+            "aksesuar", "çanta", "ayakkabı", "shoe", "dress", "elbise", "trend", "tarz",
+        ],
+        "food": [
+            "yemek", "tarif", "recipe", "lezzet", "food", "mutfak", "kitchen", "chef",
+            "restoran", "restaurant", "yiyecek", "içecek", "drink", "tatlı", "pasta",
+            "kahve", "coffee",
+        ],
+        "fitness_lifestyle": [
+            "fitness", "spor", "egzersiz", "workout", "sağlık", "health", "wellness",
+            "yoga", "pilates", "gym", "antrenman", "travel", "seyahat", "otel", "hotel",
+            "macera", "adventure",
+        ],
+    }
+
+    _DOMAIN_TAG_ALLOWLISTS: dict[str, set[str]] = {
+        "saas_tech": {"science", "community", "founder_authority", "luxury", "aspiration"},
+        "education": {
+            "science", "community", "founder_authority", "luxury", "aspiration", "ritual"
+        },
+        "physical_beauty": set(_SEMANTIC_TAG_MAP),
+        "fashion": {
+            "nature", "sensory", "luxury", "community", "aspiration", "sustainability", "ritual",
+            "provenance",
+        },
+        "food": set(_SEMANTIC_TAG_MAP),
+        "fitness_lifestyle": {
+            "nature", "community", "aspiration", "ritual", "sustainability", "sensory",
+            "provenance",
+        },
+        "unknown": set(_SEMANTIC_TAG_MAP),
+    }
+
+    _CONTENT_JOB_VOCABULARY: set[str] = {
+        "educate_with_lifestyle_context",
+        "demonstrate_efficacy_through_proof",
+        "build_trust_with_community_voice",
+        "convert_from_desire",
+        "participate_in_brand_ritual",
+        "sell_aspirational_lifestyle",
+        "create_desire_through_tension",
+        "create_desire_through_texture_and_proof",
+        "present_key_message",
+    }
+
+    _PREMIUM_SIGNAL_VOCABULARY: set[str] = {
+        "language_of_craft",
+        "provenance",
+        "sensory_detail",
+        "materiality",
+        "authority",
+        "community",
+        "education",
+        "entertainment",
+        "premium",
+        "proof",
+        "urgency",
+    }
+
+    _EMOTIONAL_EFFECT_MAP: dict[str, str] = {
+        "nature": "doğallık",
+        "science": "güven veren etkinlik",
+        "ritual": "rutinel bağlılık",
+        "founder_authority": "samimi inandırıcılık",
+        "provenance": "şeffaf köken",
+        "sustainability": "bilinçli seçim",
+        "sensory": "duyusal kanıt",
+        "luxury": "seçkinlik",
+        "community": "aidiyet",
+        "aspiration": "yaşam tarzı özlemi",
+    }
+
+    _PHYSICAL_DOMAINS: set[str] = {"physical_beauty", "fashion", "food", "fitness_lifestyle"}
 
     _ANOMALY_KEYWORDS: dict[str, list[str]] = {
         "giveaway": ["çekiliş", "giveaway", "hediye", "kazan", "kazanan", "katıl", "çekilis"],
@@ -401,7 +497,10 @@ class BrandAnalysisService:
         return None
 
     def _extract_semantic_tags(
-        self, caption: str, visual_analysis: dict[str, Any]
+        self,
+        caption: str,
+        visual_analysis: dict[str, Any],
+        domain: str = "",
     ) -> list[str]:
         text = caption.lower()
         tags: set[str] = set()
@@ -432,22 +531,44 @@ class BrandAnalysisService:
                     tags.add("nature")
                 if any(kw in obj_lower for kw in self._SEMANTIC_TAG_MAP["luxury"]):
                     tags.add("luxury")
+        allowed = self._DOMAIN_TAG_ALLOWLISTS.get(domain)
+        if allowed is not None:
+            tags = {tag for tag in tags if tag in allowed}
         return sorted(tags)
 
-    def _extract_content_job(self, caption: str, caption_analysis: dict[str, Any]) -> str:
+    def _extract_content_job(
+        self,
+        caption: str,
+        caption_analysis: dict[str, Any],
+        domain: str = "",
+    ) -> str:
         text = caption.lower()
         cta = str(caption_analysis.get("cta_type", "")).lower() if caption_analysis else ""
         aspiration = str(caption_analysis.get("aspiration_level", "")).lower()
         arc = caption_analysis.get("narrative_arc", [])
         first_arc = str(arc[0]).lower() if isinstance(arc, list) and arc else ""
 
+        llm_job = (
+            str(caption_analysis.get("content_job", "")).strip()
+            if caption_analysis
+            else ""
+        )
+        if llm_job and llm_job in self._CONTENT_JOB_VOCABULARY:
+            return llm_job
+
         if any(kw in text for kw in ["öğren", "nasıl", "bilgi", "keşfet", "neden"]):
             return "educate_with_lifestyle_context"
         if any(kw in text for kw in ["sonuç", "before", "after", "fark", "etki", "değişim"]):
             return "demonstrate_efficacy_through_proof"
-        if any(kw in text for kw in ["güven", "yorum", "memnun", "review", "sizden", "gerçek"]):
+        if any(
+            kw in text
+            for kw in ["güven", "yorum", "memnun", "review", "sizden", "gerçek"]
+        ):
             return "build_trust_with_community_voice"
-        if any(kw in text for kw in ["istiyorum", "satın", "shop", "link", "sipariş", "kodu"]):
+        if any(
+            kw in text
+            for kw in ["istiyorum", "satın", "shop", "link", "sipariş", "kodu"]
+        ):
             return "convert_from_desire"
         if "giveaway" in cta or "çekiliş" in cta:
             return "participate_in_brand_ritual"
@@ -455,31 +576,103 @@ class BrandAnalysisService:
             return "sell_aspirational_lifestyle"
         if first_arc in {"problem_setup", "tension", "myth_bust"}:
             return "create_desire_through_tension"
-        return "create_desire_through_texture_and_proof"
+        if (
+            domain in self._PHYSICAL_DOMAINS
+            and any(kw in text for kw in ["doku", "texture", "dokun", "kokusu", "hisset", "scent"])
+        ):
+            return "create_desire_through_texture_and_proof"
+        return "present_key_message"
 
     def _extract_premium_signals(
-        self, caption: str, caption_analysis: dict[str, Any], visual_analysis: dict[str, Any]
+        self,
+        caption: str,
+        caption_analysis: dict[str, Any],
+        visual_analysis: dict[str, Any],
+        domain: str = "",
     ) -> list[str]:
         signals: set[str] = set()
         text = caption.lower()
+        physical = domain in self._PHYSICAL_DOMAINS
+
         if any(kw in text for kw in ["lüks", "luxury", "premium", "kalite"]):
-            signals.add("language_of_craft")
-        if any(kw in text for kw in ["vermont", "çiftlik", "farm", "üretim"]):
+            if physical:
+                signals.add("language_of_craft")
+            else:
+                signals.add("premium")
+        if physical and any(
+            kw in text
+            for kw in ["vermont", "çiftlik", "farm", "source", "origin", "köken", "yerel"]
+        ):
             signals.add("provenance")
-        if any(kw in text for kw in ["doku", "kokusu", "hisset", "texture", "scent"]):
+        if physical and any(
+            kw in text for kw in ["doku", "kokusu", "hisset", "texture", "scent"]
+        ):
             signals.add("sensory_detail")
-        if visual_analysis and any(
+        if physical and visual_analysis and any(
             kw in str(item).lower()
             for item in visual_analysis.get("visual_signature", [])
             for kw in ["green", "gold", "glass", "minimal"]
         ):
             signals.add("materiality")
-        analysis_signals = caption_analysis.get("premium_signals", []) if caption_analysis else []
+        analysis_signals = (
+            caption_analysis.get("premium_signals", []) if caption_analysis else []
+        )
         if isinstance(analysis_signals, list):
             for signal in analysis_signals:
                 if isinstance(signal, str):
-                    signals.add(signal)
+                    normalized = signal.strip().lower()
+                    if normalized in self._PREMIUM_SIGNAL_VOCABULARY:
+                        signals.add(normalized)
+                    else:
+                        underscored = normalized.replace(" ", "_")
+                        if underscored in self._PREMIUM_SIGNAL_VOCABULARY:
+                            signals.add(underscored)
         return sorted(signals)
+
+    def _infer_domain(
+        self,
+        caption: str,
+        visual_analysis: dict[str, Any],
+        visual_summary: str = "",
+    ) -> str:
+        text = f"{caption} {visual_summary}".lower()
+        if visual_analysis:
+            for field in (
+                "contextual_placement",
+                "aspirational_lifestyle_narrative",
+                "visual_hook",
+                "material_context",
+                "aesthetic_style",
+                "composition_style",
+                "lighting_type",
+            ):
+                text += " " + str(visual_analysis.get(field, "")).lower()
+            text += " " + " ".join(
+                str(item).lower() for item in visual_analysis.get("objects", [])
+            )
+            text += " " + " ".join(
+                str(item).lower() for item in visual_analysis.get("visual_signature", [])
+            )
+        scores: dict[str, int] = {}
+        for candidate, keywords in self._DOMAIN_KEYWORDS.items():
+            scores[candidate] = sum(1 for kw in keywords if kw in text)
+        if not any(scores.values()):
+            if visual_analysis and any(
+                kw in text
+                for kw in ["bottle", "jar", "tube", "cream", "serum", "skin", "texture", "makeup"]
+            ):
+                return "physical_beauty"
+            return "unknown"
+        return max(scores, key=scores.get)
+
+    def _dominant_domain(self, posts: list[PostSummary]) -> str:
+        counts: dict[str, int] = {}
+        for post in posts:
+            if post.domain:
+                counts[post.domain] = counts.get(post.domain, 0) + 1
+        if not counts:
+            return "unknown"
+        return max(counts, key=counts.get)
 
     def _build_evidence_reference(
         self, post: PostSummary, field: str, excerpt: str, why_supports: str

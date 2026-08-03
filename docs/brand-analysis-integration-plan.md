@@ -1,6 +1,6 @@
 # Instagram Marka Referans Analizi — Entegrasyon Planı
 
-> **Kapsam:** Mevcut `involo-poc-2` projesine sadece **admin** için bir “marka referans analizi” modülü eklenir. Kullanıcı bir Instagram URL/kullanıcı adı girer; sistem hedef hesabın son gönderilerini analiz edip profesyonel, chat ekranı tarzında bir markdown rapor sunar.
+> **Kapsam:** Mevcut `involo-trendy-poc` projesine sadece **admin** için bir “marka referans analizi” modülü eklenir. Kullanıcı bir Instagram URL/kullanıcı adı girer; sistem hedef hesabın son gönderilerini analiz edip profesyonel, chat ekranı tarzında bir markdown rapor sunar.
 >
 > **Yaklaşım:** PoC odaklı; mevcut altyapı (FastAPI, Celery, MongoDB, Redis, Bedrock, S3/MinIO, Next.js) maksimum düzeyde yeniden kullanılır. Dokümandaki Step Functions / Lambda / DynamoDB / API Gateway detaylarına takılmadan, projenin kendi mimarisine uyarlanır.
 

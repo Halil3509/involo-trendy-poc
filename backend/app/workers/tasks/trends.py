@@ -20,6 +20,7 @@ from app.workers.runtime import (
     SCRAPER_LOCK,
     execute_job,
     log_bus,
+    request_intervention,
     run_locked,
 )
 
@@ -78,9 +79,15 @@ async def _scrape(resources: Resources, keywords: list[str], task_id: str) -> di
     else:
         access_token = None
 
+    request_intervention_fn = partial(request_intervention, resources, task_id)
     service = ScraperService(
         resources.db,
-        build_scraper(scrape_settings, access_token=access_token, redis=resources.redis),
+        build_scraper(
+            scrape_settings,
+            access_token=access_token,
+            redis=resources.redis,
+            request_intervention=request_intervention_fn,
+        ),
     )
     return await service.run(keywords, int(limit), emit, job_id=task_id)
 
@@ -98,7 +105,7 @@ def scrape_instagram(self: Any, keywords: list[str]) -> dict[str, int]:
 
 
 async def _enrich(resources: Resources, limit: int | None, task_id: str) -> dict[str, int]:
-
+    
     assert resources.db is not None
     emit = partial(_publish, resources, task_id, step="enrich")
     threshold = await _config_value(resources, "viral_threshold", ScraperConfig().viral_threshold)

@@ -7,18 +7,18 @@ set -euo pipefail
 # Defaults assume an SSH alias named "involo-poc" configured in ~/.ssh/config.
 #
 # Environment overrides:
-#   DEPLOY_REPO_NAME          GitHub repo name (default: involo-poc-2)
+#   DEPLOY_REPO_NAME          GitHub repo name (default: involo-trendy-poc)
 #   DEPLOY_GITHUB_ACCOUNT     GitHub account/org (default: Halil3509)
 #   DEPLOY_SSH_HOST           SSH alias or host (default: involo-poc)
-#   DEPLOY_SERVER_PATH        Server app directory (default: /home/ubuntu/involo-poc-2)
+#   DEPLOY_SERVER_PATH        Server app directory (default: /home/ubuntu/involo-trendy-poc)
 #   INVOLO_NGROK_DOMAIN       Public domain for Instagram OAuth and API (default: involo-poc.hellodesk.com.tr)
 #   GITHUB_TOKEN              Required: PAT with 'repo' scope to create/push/pull the GitHub repo.
 #   DEPLOY_REPO_PRIVATE       Set to 1 to create a private repo (default: public for simpler server pulls)
 
-DEPLOY_REPO_NAME="${DEPLOY_REPO_NAME:-involo-poc-2}"
+DEPLOY_REPO_NAME="${DEPLOY_REPO_NAME:-involo-trendy-poc}"
 DEPLOY_GITHUB_ACCOUNT="${DEPLOY_GITHUB_ACCOUNT:-Halil3509}"
 DEPLOY_SSH_HOST="${DEPLOY_SSH_HOST:-involo-poc}"
-DEPLOY_SERVER_PATH="${DEPLOY_SERVER_PATH:-/home/ubuntu/involo-poc-2}"
+DEPLOY_SERVER_PATH="${DEPLOY_SERVER_PATH:-/home/ubuntu/involo-trendy-poc}"
 INVOLO_NGROK_DOMAIN="${INVOLO_NGROK_DOMAIN:-involo-poc.hellodesk.com.tr}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 DEPLOY_REPO_PRIVATE="${DEPLOY_REPO_PRIVATE:-}"

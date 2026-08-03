@@ -12,6 +12,43 @@ class ScraperService:
         self.db = db
         self.adapter = adapter
 
+    async def _update_progress(
+        self,
+        job_id: str,
+        progress: dict[str, Any],
+        step: str | None,
+        keyword: str | None,
+        count: int | None,
+    ) -> None:
+        """Persist live scraper progress to the job document."""
+        if keyword:
+            progress["current_keyword"] = keyword
+            entry = next(
+                (k for k in progress["keywords"] if k.get("name") == keyword),
+                None,
+            )
+            if entry is None:
+                entry = {"name": keyword, "discovered": 0, "status": "running"}
+                progress["keywords"].append(entry)
+            if step == "collected":
+                entry["status"] = "completed"
+                if count is not None:
+                    entry["discovered"] = count
+                progress["total_discovered"] = sum(
+                    k.get("discovered", 0) for k in progress["keywords"]
+                )
+            elif step == "keyword":
+                entry["status"] = "opening"
+            elif step == "collect":
+                entry["status"] = "collecting"
+        elif step:
+            progress["current_step"] = step
+
+        await self.db.job_runs.update_one(
+            {"task_id": job_id},
+            {"$set": {"progress": progress}},
+        )
+
     async def run(
         self,
         keywords: list[str],
@@ -26,6 +63,13 @@ class ScraperService:
             step="start",
         )
         adapter_metrics: dict[str, int] = {}
+        progress: dict[str, Any] = {
+            "current_keyword": None,
+            "current_step": "start",
+            "keywords": [],
+            "total_discovered": 0,
+            "total_target": len(keywords) * limit,
+        }
 
         async def emit(
             message: str,
@@ -37,6 +81,14 @@ class ScraperService:
             for key in ("failed_keywords", "keywords_count"):
                 if key in data and isinstance(data[key], int):
                     adapter_metrics[key] = data[key]
+            if job_id and step in ("keyword", "collect", "collected"):
+                await self._update_progress(
+                    job_id,
+                    progress,
+                    step,
+                    data.get("keyword"),
+                    data.get("count"),
+                )
             await on_event(message, level=level, step=step, **data)
 
         existing_cache: dict[str, bool] = {}
@@ -65,6 +117,12 @@ class ScraperService:
         for item in items:
             result = await self.upsert(item, job_id=job_id)
             counters["inserted" if result else "updated"] += 1
+        progress["current_step"] = "done"
+        progress["total_discovered"] = counters["discovered"]
+        if job_id:
+            await self._update_progress(
+                job_id, progress, "done", progress.get("current_keyword"), None
+            )
         await on_event(
             (
                 f"Scrape finished: {counters['discovered']} discovered, "

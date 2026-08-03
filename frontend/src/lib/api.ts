@@ -321,6 +321,14 @@ export const api = {
     request<Job>(`/api/v1/admin/jobs/${encodeURIComponent(id)}/stop`, {
       method: "POST",
     }).then(normalizeJob),
+  submitInterventionResponse: (
+    id: string,
+    body: { code: string; action?: string | null },
+  ) =>
+    request<Job>(`/api/v1/admin/jobs/${encodeURIComponent(id)}/intervention`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).then(normalizeJob),
   getPipelineStats: () =>
     request<PipelineStats>("/api/v1/admin/pipeline/stats"),
   getTrendContent: (params: TrendContentFilters = {}) => {

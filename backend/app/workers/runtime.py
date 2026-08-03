@@ -1,6 +1,7 @@
 import asyncio
+import json
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, cast
 
 from redis import Redis as SyncRedis
 from redis.asyncio import Redis as AsyncRedis
@@ -18,6 +19,11 @@ CANCEL_KEY_PREFIX = "involo:job:cancel"
 CANCEL_TTL_SECONDS = 3600
 CANCEL_POLL_SECONDS = 1.0
 
+INTERVENTION_REQUEST_KEY_PREFIX = "involo:job:intervention"
+INTERVENTION_RESPONSE_KEY_PREFIX = "involo:job:intervention_response"
+INTERVENTION_TTL_SECONDS = 600
+INTERVENTION_POLL_SECONDS = 1.0
+
 
 def cancel_key(task_id: str) -> str:
     return f"{CANCEL_KEY_PREFIX}:{task_id}"
@@ -34,6 +40,95 @@ async def is_cancel_requested(redis: AsyncRedis | None, task_id: str) -> bool:
     if redis is None:
         return False
     return bool(await redis.exists(cancel_key(task_id)))
+
+
+def intervention_request_key(task_id: str) -> str:
+    return f"{INTERVENTION_REQUEST_KEY_PREFIX}:{task_id}"
+
+
+def intervention_response_key(task_id: str) -> str:
+    return f"{INTERVENTION_RESPONSE_KEY_PREFIX}:{task_id}"
+
+
+async def submit_intervention_response(
+    redis: AsyncRedis,
+    task_id: str,
+    payload: dict[str, Any],
+) -> None:
+    """Store the admin's response to an intervention request."""
+    await redis.set(
+        intervention_response_key(task_id),
+        json.dumps(payload),
+        ex=INTERVENTION_TTL_SECONDS,
+    )
+
+
+async def request_intervention(
+    resources: Resources,
+    task_id: str,
+    prompt: str,
+    fields: list[str],
+    timeout_seconds: float = 600.0,
+) -> dict[str, Any]:
+    """Pause the job, ask the admin for input via the log bus, and wait for it.
+
+    Publishes an ``intervention`` log event, updates the job state, and polls
+    Redis for a response. Raises ``asyncio.CancelledError`` if the job is
+    cancelled, or ``NeedsInterventionError`` if the timeout expires.
+    """
+    if resources.redis is None:
+        raise NeedsInterventionError("Redis is required for intervention requests")
+
+    response_key = intervention_response_key(task_id)
+    await resources.redis.delete(response_key)
+
+    if resources.db is not None:
+        await resources.db.job_runs.update_one(
+            {"task_id": task_id},
+            {
+                "$set": {
+                    "state": "needs_intervention",
+                    "intervention": {
+                        "prompt": prompt,
+                        "fields": fields,
+                        "requested_at": utcnow().isoformat(),
+                    },
+                    "finished_at": None,
+                }
+            },
+        )
+
+    bus = log_bus(resources)
+    if bus is not None:
+        await bus.publish(
+            task_id,
+            prompt,
+            level="intervention",
+            step="needs_input",
+            data={"fields": fields, "prompt": prompt},
+        )
+
+    loop = asyncio.get_event_loop()
+    started = loop.time()
+    while True:
+        if await is_cancel_requested(resources.redis, task_id):
+            raise asyncio.CancelledError()
+
+        raw = await resources.redis.get(response_key)
+        if raw:
+            try:
+                return cast(dict[str, Any], json.loads(raw))
+            except (ValueError, TypeError) as exc:
+                raise NeedsInterventionError(
+                    f"Invalid intervention response: {exc}"
+                ) from exc
+
+        if loop.time() - started > timeout_seconds:
+            raise NeedsInterventionError(
+                f"Intervention timed out after {timeout_seconds} seconds"
+            )
+
+        await asyncio.sleep(INTERVENTION_POLL_SECONDS)
 
 
 def log_bus(resources: Resources) -> JobLogBus | None:
@@ -164,6 +259,7 @@ async def execute_job(
     finally:
         if resources.redis is not None:
             await resources.redis.delete(cancel_key(task_id))
+            await resources.redis.delete(intervention_response_key(task_id))
         await resources.close()
 
 

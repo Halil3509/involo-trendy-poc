@@ -12,10 +12,15 @@ from app.api.dependencies import AdminUser, resources
 from app.api.responses import job_response
 from app.api.statistics import compute_pipeline_stats
 from app.infrastructure.resources import utcnow
-from app.schemas.jobs import JobResponse
+from app.schemas.jobs import InterventionSubmission, JobResponse
 from app.schemas.trends import AdminOverview
 from app.workers.celery_app import celery_app
-from app.workers.runtime import CANCEL_TTL_SECONDS, cancel_key
+from app.workers.runtime import (
+    CANCEL_TTL_SECONDS,
+    cancel_key,
+    request_cancel,
+    submit_intervention_response,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin", "stats"])
 
@@ -95,4 +100,30 @@ async def stop_job(
         {"task_id": task_id},
         {"$set": {"state": "cancelled", "finished_at": now, "error": "Stopped by user"}},
     )
+    return job_response(await db.job_runs.find_one({"task_id": task_id}))
+
+
+@router.post("/jobs/{task_id}/intervention", response_model=JobResponse)
+async def submit_job_intervention(
+    task_id: str,
+    submission: InterventionSubmission,
+    request: Request,
+    _: AdminUser,
+) -> JobResponse:
+    """Submit a response to a running job that is awaiting admin intervention."""
+    db = resources(request).db
+    redis = resources(request).redis
+    document = await db.job_runs.find_one({"task_id": task_id})
+    if not document:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+    if document["state"] != "needs_intervention":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Job is not awaiting intervention")
+    if redis is None:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Redis is unavailable"
+        )
+    if submission.action == "cancel":
+        await request_cancel(redis, task_id)
+    else:
+        await submit_intervention_response(redis, task_id, {"code": submission.code})
     return job_response(await db.job_runs.find_one({"task_id": task_id}))

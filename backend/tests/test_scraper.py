@@ -219,7 +219,7 @@ async def test_login_intervention_text_is_detected(tmp_path: Path) -> None:
     )
     scraper = InstagramScraper(settings)
     page: Any = cast(Any, _FakePage("We noticed suspicious login activity."))
-    with pytest.raises(NeedsInterventionError, match="verification or has blocked"):
+    with pytest.raises(NeedsInterventionError, match="requires verification"):
         await scraper._raise_for_intervention_text(page)
 
 
@@ -717,7 +717,7 @@ async def test_ensure_authenticated_logs_in_and_returns_to_target(tmp_path: Path
     page: Any = _FakePage()
     page.url = "https://www.instagram.com/accounts/login/"
 
-    async def fake_login(p: Any) -> None:
+    async def fake_login(p: Any, on_event: Any = None) -> None:
         p.url = "https://www.instagram.com/"
 
     login_mock = AsyncMock(side_effect=fake_login)

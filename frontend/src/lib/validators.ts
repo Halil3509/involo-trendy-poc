@@ -2,6 +2,8 @@ import type {
   ContentRecommendation,
   InstagramStatus,
   Job,
+  JobIntervention,
+  JobProgress,
   RecommendationBatch,
   RecommendationEvidence,
   RecommendationState,
@@ -108,6 +110,37 @@ export function normalizeInstagramStatus(value: unknown): InstagramStatus {
   };
 }
 
+function normalizeJobProgress(value: unknown): JobProgress | null {
+  const record = isRecord(value) ? value : {};
+  const keywords = Array.isArray(record.keywords)
+    ? record.keywords.filter(isRecord).map((item) => ({
+        name: asString(item.name, ""),
+        discovered: asNumber(item.discovered, 0),
+        status: asString(item.status, "running"),
+      }))
+    : [];
+  return {
+    current_keyword: asOptionalString(record.current_keyword, true) ?? null,
+    current_step: asString(record.current_step, "start"),
+    keywords,
+    total_discovered: asNumber(record.total_discovered, 0),
+    total_target: asNumber(record.total_target, 0),
+  };
+}
+
+function normalizeJobIntervention(value: unknown): JobIntervention | null {
+  const record = isRecord(value) ? value : {};
+  const requestedAt = asOptionalString(record.requested_at);
+  if (!requestedAt) return null;
+  return {
+    prompt: asString(record.prompt, ""),
+    fields: Array.isArray(record.fields)
+      ? record.fields.map((field) => asString(field, ""))
+      : [],
+    requested_at: requestedAt,
+  };
+}
+
 export function normalizeJob(value: unknown): Job {
   const record = isRecord(value) ? value : {};
   return {
@@ -119,6 +152,10 @@ export function normalizeJob(value: unknown): Job {
           Object.entries(record.counters).map(([key, val]) => [key, asNumber(val, 0)]),
         )
       : {},
+    progress: record.progress ? normalizeJobProgress(record.progress) : null,
+    intervention: record.intervention
+      ? normalizeJobIntervention(record.intervention)
+      : null,
     error: asOptionalString(record.error, true),
     created_at: asOptionalString(record.created_at),
     started_at: asOptionalString(record.started_at, true),

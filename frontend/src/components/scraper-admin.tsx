@@ -5,11 +5,13 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
 import { ApiError, api } from "@/lib/api";
 import { ScraperLogConsole } from "@/components/scraper-log-console";
+import { ScraperProgressPanel } from "@/components/scraper-progress-panel";
 import { TrendContentTable } from "@/components/trend-content-table";
 import { usePolling } from "@/lib/hooks";
 import type { Job, PipelineStats, ScraperConfig } from "@/lib/types";
@@ -47,6 +49,7 @@ export function ScraperAdmin() {
   const [stopping, setStopping] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [submittingIntervention, setSubmittingIntervention] = useState(false);
 
   const loadLatest = useCallback(async () => {
     try {
@@ -112,6 +115,58 @@ export function ScraperAdmin() {
   usePolling(pollActiveJobs, isRunActive(latestRun) || isRunActive(pipelineRun), {
     onError: (err) => setError(err.message),
   });
+
+  const selectedJob = recentJobs.find((job) => job.id === selectedJobId) ?? null;
+
+  const interventionJob = useMemo(() => {
+    if (
+      latestRun?.state.toLowerCase() === "needs_intervention" &&
+      latestRun?.intervention
+    ) {
+      return latestRun;
+    }
+    if (
+      selectedJob?.state.toLowerCase() === "needs_intervention" &&
+      selectedJob?.intervention
+    ) {
+      return selectedJob;
+    }
+    return null;
+  }, [latestRun, selectedJob]);
+
+  async function submitIntervention(jobId: string, code: string) {
+    setSubmittingIntervention(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.submitInterventionResponse(jobId, { code });
+      setMessage("Verification code submitted. Resuming scraper...");
+      await Promise.all([loadLatest(), loadJobs()]);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Unable to submit verification code.",
+      );
+    } finally {
+      setSubmittingIntervention(false);
+    }
+  }
+
+  async function cancelIntervention(jobId: string) {
+    setSubmittingIntervention(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.stopJob(jobId);
+      setMessage("Scraper stopped.");
+      await Promise.all([loadLatest(), loadJobs()]);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Unable to stop scraper.",
+      );
+    } finally {
+      setSubmittingIntervention(false);
+    }
+  }
 
   function commitKeyword() {
     const next = addKeyword(config.keywords, keyword);
@@ -237,7 +292,6 @@ export function ScraperAdmin() {
 
   const active = isRunActive(latestRun);
   const pipelineActive = isRunActive(pipelineRun);
-  const selectedJob = recentJobs.find((job) => job.id === selectedJobId) ?? null;
 
   return (
     <main className="page-container">
@@ -527,7 +581,95 @@ export function ScraperAdmin() {
       <div className="mt-6">
         <TrendContentTable latestJobId={latestRun?.id ?? null} />
       </div>
+
+      {interventionJob && (
+        <InterventionModal
+          key={interventionJob.id}
+          job={interventionJob}
+          submitting={submittingIntervention}
+          onSubmit={(code) => void submitIntervention(interventionJob.id, code)}
+          onCancel={() => void cancelIntervention(interventionJob.id)}
+        />
+      )}
     </main>
+  );
+}
+
+function InterventionModal({
+  job,
+  submitting,
+  onSubmit,
+  onCancel,
+}: {
+  job: Job;
+  submitting: boolean;
+  onSubmit: (code: string) => void;
+  onCancel: () => void;
+}) {
+  const [code, setCode] = useState("");
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="intervention-title"
+    >
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <h2
+          id="intervention-title"
+          className="text-lg font-semibold text-slate-900"
+        >
+          Instagram verification required
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">
+          {job.intervention?.prompt ??
+            "The scraper needs a verification code to continue."}
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onSubmit(code);
+          }}
+          className="mt-4 space-y-4"
+        >
+          <div>
+            <label className="label" htmlFor="intervention-code">
+              Verification code
+            </label>
+            <input
+              id="intervention-code"
+              className="input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="Enter the code"
+              autoFocus
+            />
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={!code.trim() || submitting}
+            >
+              {submitting && <span className="spinner spinner-light" />}
+              {submitting ? "Submitting..." : "Submit code"}
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              disabled={submitting}
+              onClick={() => void onCancel()}
+            >
+              Cancel / stop scraper
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -792,6 +934,9 @@ function RunPanel({ run, title }: { run: Job | null; title: string }) {
       {run ? (
         <div className="p-5 sm:p-6">
           <CounterGrid counters={run.counters} />
+          {run.kind === "scrape" && (
+            <ScraperProgressPanel progress={run.progress} />
+          )}
           {(run.started_at || run.created_at) && (
             <dl className="mt-6 space-y-2 border-t border-slate-100 pt-5 text-sm">
               <TimeRow label="Started" value={run.started_at ?? run.created_at} />

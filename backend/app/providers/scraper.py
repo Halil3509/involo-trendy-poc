@@ -16,6 +16,7 @@ import httpx
 from playwright.async_api import (
     Browser,
     BrowserContext,
+    Locator,
     Page,
     async_playwright,
 )
@@ -711,10 +712,13 @@ class InstagramScraper(ScraperAdapter):
         *,
         access_token: str | None = None,
         graph_limiter: GraphApiRateLimiter | None = None,
+        request_intervention: Callable[[str, list[str]], Awaitable[dict[str, Any]]]
+        | None = None,
     ) -> None:
         self.settings = settings
         self._access_token = access_token
         self.graph_limiter = graph_limiter
+        self._request_intervention = request_intervention
         self.browser: Browser | None = None
         self.context: BrowserContext | None = None
 
@@ -734,11 +738,105 @@ class InstagramScraper(ScraperAdapter):
                 "and refresh the saved session."
             )
 
-    async def _intervention_guard(self, page: Page) -> None:
-        if any(path in page.url for path in INTERVENTION_PATHS):
+    async def _find_verification_code_input(self, page: Page) -> Locator | None:
+        """Return the first visible verification code input on the page, if any."""
+        selectors = [
+            'input[name="verification_code"]',
+            'input[name="security_code"]',
+            'input[name="confirmation_code"]',
+            'input[autocomplete="one-time-code"]',
+            'input[inputmode="numeric"]',
+            'input[type="tel"]',
+            'input[placeholder*="code" i]',
+            'input[placeholder*="kod" i]',
+        ]
+        for selector in selectors:
+            try:
+                loc = page.locator(selector).first
+                if await loc.is_visible(timeout=2_000):
+                    return loc
+            except PlaywrightError:
+                continue
+        return None
+
+    async def _find_verification_submit_button(self, page: Page) -> Locator | None:
+        """Return a visible submit/confirm button near a verification form, if any."""
+        selectors = [
+            'button[type="submit"]',
+            'button:has-text("Submit")',
+            'button:has-text("Gönder")',
+            'button:has-text("Confirm")',
+            'button:has-text("Onayla")',
+            'button:has-text("Continue")',
+            'button:has-text("Devam")',
+            'div[role="button"]:has-text("Submit")',
+            'div[role="button"]:has-text("Gönder")',
+        ]
+        for selector in selectors:
+            try:
+                loc = page.locator(selector).first
+                if await loc.is_visible(timeout=2_000):
+                    return loc
+            except PlaywrightError:
+                continue
+        return None
+
+    async def _resolve_intervention_page(
+        self,
+        page: Page,
+        *,
+        context: str = "login",
+        on_event: EmitFn = noop_emit,
+    ) -> None:
+        """Ask the admin for a verification code and submit it to the page.
+
+        Raises ``NeedsInterventionError`` if no handler is configured or the code
+        cannot be submitted.
+        """
+        if self._request_intervention is None:
             raise NeedsInterventionError(
-                "Instagram requires challenge, captcha, or two-factor authentication"
+                f"Instagram requires verification ({context}); no intervention handler configured"
             )
+
+        code_input = await self._find_verification_code_input(page)
+        if code_input is None:
+            raise NeedsInterventionError(
+                f"Instagram requires verification ({context}); could not locate a code input"
+            )
+
+        prompt = (
+            "Instagram is asking for a verification code. "
+            "Enter the code sent to your device."
+        )
+        response = await self._request_intervention(prompt, ["code"])
+        code = str(response.get("code", "")).strip()
+        if not code:
+            raise NeedsInterventionError("No verification code provided")
+
+        await on_event(
+            f"Verification code received ({context}); submitting.",
+            step="intervention",
+        )
+        try:
+            await code_input.fill("")
+            await code_input.fill(code)
+            await page.wait_for_timeout(500)
+            submit = await self._find_verification_submit_button(page)
+            if submit is not None:
+                await submit.click()
+            else:
+                await code_input.press("Enter")
+            await page.wait_for_timeout(1_500)
+        except PlaywrightError as exc:
+            raise NeedsInterventionError(
+                f"Could not submit verification code ({context}): {exc}"
+            ) from exc
+
+    async def _intervention_guard(
+        self, page: Page, on_event: EmitFn = noop_emit
+    ) -> None:
+        if any(path in page.url for path in INTERVENTION_PATHS):
+            await self._resolve_intervention_page(page, context="session", on_event=on_event)
 
     # Labels that are too generic (e.g. "Allow", "Accept", "Tamam") can match login/
     # notification buttons and break the flow, so keep this list specific to cookies.
@@ -822,13 +920,26 @@ class InstagramScraper(ScraperAdapter):
         except (PlaywrightError, OSError):
             return None
 
-    async def _raise_for_intervention_text(self, page: Page) -> None:
-        """Raise NeedsInterventionError if visible page text indicates a block/challenge."""
+    async def _raise_for_intervention_text(
+        self, page: Page, on_event: EmitFn = noop_emit
+    ) -> None:
+        """Handle or raise when visible page text indicates a block/challenge."""
         try:
             body_text = await page.locator("body").inner_text(timeout=3_000)
         except PlaywrightError:
             return
         if body_text and _BLOCKED_TEXT_RE.search(body_text):
+            # Try to resolve a verification code challenge first.
+            await self._resolve_intervention_page(
+                page, context="login", on_event=on_event
+            )
+            # Re-check the page after submission.
+            try:
+                body_text = await page.locator("body").inner_text(timeout=3_000)
+            except PlaywrightError:
+                return
+            if not body_text or not _BLOCKED_TEXT_RE.search(body_text):
+                return
             debug_path = await self._capture_login_debug(page)
             detail = (
                 f" Debug artifacts saved to {debug_path.parent}."
@@ -841,7 +952,7 @@ class InstagramScraper(ScraperAdapter):
                 f"{detail}"
             )
 
-    async def _login(self, page: Page) -> None:
+    async def _login(self, page: Page, on_event: EmitFn = noop_emit) -> None:
         username = (self.settings.instagram_username or "").strip()
         raw_password = self.settings.instagram_password
         password = raw_password.get_secret_value().strip() if raw_password else ""
@@ -861,7 +972,7 @@ class InstagramScraper(ScraperAdapter):
                 f"Could not open Instagram login page: {goto_exc}"
             ) from goto_exc
 
-        await self._intervention_guard(page)
+        await self._intervention_guard(page, on_event=on_event)
 
         # The form is rendered by JS; wait for the page to settle and dismiss any banner.
         try:
@@ -1012,14 +1123,16 @@ class InstagramScraper(ScraperAdapter):
 
         # Give the login request time to navigate. If the click did not trigger the
         # form submission, press Enter on the password field as a fallback.
-        await self._wait_for_login_navigation(page)
+        await self._wait_for_login_navigation(page, on_event=on_event)
 
         state_path = Path(self.settings.scraper_storage_state_path)
         state_path.parent.mkdir(parents=True, exist_ok=True)
         assert self.context is not None
         await self.context.storage_state(path=state_path)
 
-    async def _wait_for_login_navigation(self, page: Page) -> None:
+    async def _wait_for_login_navigation(
+        self, page: Page, on_event: EmitFn = noop_emit
+    ) -> None:
         """Wait for Instagram login to complete, falling back to Enter if needed."""
         for attempt in range(1, 3):
             if attempt == 2:
@@ -1036,8 +1149,8 @@ class InstagramScraper(ScraperAdapter):
             except PlaywrightError:
                 pass
             await page.wait_for_timeout(1_500)
-            await self._intervention_guard(page)
-            await self._raise_for_intervention_text(page)
+            await self._intervention_guard(page, on_event=on_event)
+            await self._raise_for_intervention_text(page, on_event=on_event)
 
             try:
                 current_url = page.url
@@ -1056,6 +1169,14 @@ class InstagramScraper(ScraperAdapter):
         error_text = await self._extract_login_error_text(page)
         if error_text:
             detail = f"; page message: {error_text.strip()}{detail}"
+            # One last attempt to resolve a verification code challenge.
+            if "checkpoint" in error_text.lower() or "doğrulama" in error_text.lower():
+                await self._resolve_intervention_page(
+                    page, context="login", on_event=on_event
+                )
+                # If resolution changed the URL, we are done; otherwise fall through.
+                if "/accounts/login" not in page.url:
+                    return
 
         raise NeedsInterventionError(f"Instagram login was not accepted{detail}")
 
@@ -1097,22 +1218,24 @@ class InstagramScraper(ScraperAdapter):
                 return phrase
         return None
 
-    async def _ensure_session(self, page: Page) -> None:
+    async def _ensure_session(
+        self, page: Page, on_event: EmitFn = noop_emit
+    ) -> None:
         await page.goto(
             "https://www.instagram.com/accounts/edit/",
             wait_until="domcontentloaded",
             timeout=30_000,
         )
-        await self._intervention_guard(page)
+        await self._intervention_guard(page, on_event=on_event)
         # Allow any client-side/session redirect to settle before deciding whether
         # the stored session is still valid and can be reused.
         try:
             await page.wait_for_load_state("networkidle", timeout=10_000)
         except PlaywrightError:
             pass
-        await self._intervention_guard(page)
+        await self._intervention_guard(page, on_event=on_event)
         if "/accounts/login" in page.url:
-            await self._login(page)
+            await self._login(page, on_event=on_event)
 
     async def _ensure_authenticated(
         self,
@@ -1132,7 +1255,7 @@ class InstagramScraper(ScraperAdapter):
             level="warning",
             step="session",
         )
-        await self._login(page)
+        await self._login(page, on_event=on_event)
         if not target_url:
             return
         try:
@@ -1141,7 +1264,7 @@ class InstagramScraper(ScraperAdapter):
             raise NeedsInterventionError(
                 f"Could not return to {target_url} after login: {goto_exc}"
             ) from goto_exc
-        await self._intervention_guard(page)
+        await self._intervention_guard(page, on_event=on_event)
 
     async def _load_storage_state(self) -> None:
         """Seed the browser context with saved cookies from a previous run.
@@ -2333,7 +2456,7 @@ class InstagramScraper(ScraperAdapter):
                                 level="warning",
                                 step="session",
                             )
-                            await self._login(page)
+                            await self._login(page, on_event=on_event)
                         else:
                             await on_event(
                                 f"Could not open explore page for '{keyword}'.",
@@ -2503,12 +2626,19 @@ def build_scraper(
     *,
     access_token: str | None = None,
     redis: Any | None = None,
+    request_intervention: Callable[[str, list[str]], Awaitable[dict[str, Any]]]
+    | None = None,
 ) -> ScraperAdapter:
     graph_limiter = build_graph_rate_limiter(redis, settings)
     if settings.scraper_adapter == "meta":
         return MetaTrendAdapter(settings, access_token=access_token, graph_limiter=graph_limiter)
     if settings.scraper_adapter == "instagram":
-        return InstagramScraper(settings, access_token=access_token, graph_limiter=graph_limiter)
+        return InstagramScraper(
+            settings,
+            access_token=access_token,
+            graph_limiter=graph_limiter,
+            request_intervention=request_intervention,
+        )
     if settings.scraper_adapter == "fixture":
         return FixtureTrendAdapter(settings, access_token=access_token)
     raise RuntimeError(f"unsupported scraper adapter: {settings.scraper_adapter}")

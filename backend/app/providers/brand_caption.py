@@ -57,12 +57,24 @@ class BedrockBrandCaptionAnalyzer(BrandCaptionAnalyzer):
             "matching the schema below. Do not use markdown code fences, explanations, or any text "
             "outside the JSON object.\n\n"
             "ADDITIONAL FIELD INSTRUCTIONS:\n"
+            "- content_job: Choose the caption's strategic purpose from this closed set: "
+            "'educate_with_lifestyle_context', 'demonstrate_efficacy_through_proof', "
+            "'build_trust_with_community_voice', 'convert_from_desire', "
+            "'participate_in_brand_ritual', 'sell_aspirational_lifestyle', "
+            "'create_desire_through_tension', 'create_desire_through_texture_and_proof' "
+            "(only when a physical product's texture/sensory proof is central), "
+            "'present_key_message' (default for announcements/updates).\n"
             "- hook_type: Classify the opening hook style "
             "(e.g. 'curiosity_gap', 'bold_claim', 'problem_statement', 'question', 'story').\n"
             "- narrative_arc: For carousels, list the per-slide narrative roles "
             "(e.g. ['hook', 'educate', 'proof', 'cta']). For single posts, use ['single'].\n"
-            "- persona_triggers: List psychological triggers the caption activates "
-            "(e.g. 'bilimsel_kanit', 'dogal_icerik', 'rituel', 'aidelik').\n"
+            "- persona_triggers: List 1-3 domain-neutral psychological triggers "
+            "(e.g. 'curiosity', 'belonging', 'efficiency', 'status', 'fear_of_missing_out'). "
+            "Do not force 'dogal_icerik' or 'rituel' unless the caption explicitly supports them.\n"
+            "- premium_signals: Optional list of brand signalling codes from this closed set: "
+            "'authority', 'community', 'education', 'entertainment', 'premium', 'proof', "
+            "'urgency'. Do not include product names, people names, hashtags, or raw keywords. "
+            "Return an empty list when none apply.\n"
             "- aspiration_level: Classify the aspiration tier "
             "('premium', 'accessible', 'mass').\n"
             "- slide_count_estimate: If this is a carousel, estimate the number of slides "
@@ -112,12 +124,14 @@ class FakeBrandCaptionAnalyzer(BrandCaptionAnalyzer):
             hashtag_strategy="orta-düzey marka etiketleri",
             emoji_usage="minimal",
             cta_type="soru",
-            keywords=["ürün", "cilt", "bakım"],
-            target_audience_hint="cilt bakımıyla ilgilenen 25-45 yaş",
+            content_job="educate_with_lifestyle_context",
+            premium_signals=["authority", "education"],
+            keywords=["içerik", "strateji", "büyüme"],
+            target_audience_hint="sosyal medya yöneticileri ve kurucular",
             message_clarity_score=7,
             hook_type="curiosity_gap" if len(caption) > 50 else "question",
             narrative_arc=["hook", "educate", "cta"],
-            persona_triggers=["doğal içerik", "ritüel"],
+            persona_triggers=["verimlilik", "büyüme"],
             aspiration_level="accessible",
             slide_count_estimate=3,
         )

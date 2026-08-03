@@ -97,6 +97,7 @@ class PostSummary(BaseModel):
     anomaly_candidate: str | None = None
     premium_signals: list[str] = Field(default_factory=list)
     confidence: ConfidenceLevel = "low"
+    domain: str = ""
 
 
 class MetricObservation(BaseModel):
@@ -147,6 +148,7 @@ class BrandWorldSynthesis(BaseModel):
     premium_mechanism: str = ""
     avoided_elements: list[str] = Field(default_factory=list)
     confidence: ConfidenceLevel = "low"
+    domain: str = ""
 
 
 class SuccessDNATriad(BaseModel):

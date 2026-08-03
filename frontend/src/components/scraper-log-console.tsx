@@ -15,18 +15,25 @@ export function ScraperLogConsole({
   title = "Live bot log",
   path = SCRAPER_LOGS_PATH,
   idleMessage = "Start a scrape to stream live activity.",
+  onIntervention,
 }: {
   taskId: string | null;
   creatorId?: string;
   title?: string;
   path?: string;
   idleMessage?: string;
+  onIntervention?: (event: ScraperLogEvent) => void;
 }) {
   const [events, setEvents] = useState<ScraperLogEvent[]>([]);
   const [connection, setConnection] = useState<ConnectionState>(
     taskId ? "connecting" : "closed",
   );
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const onInterventionRef = useRef(onIntervention);
+
+  useEffect(() => {
+    onInterventionRef.current = onIntervention;
+  }, [onIntervention]);
 
   useEffect(() => {
     if (!taskId) return;
@@ -41,6 +48,13 @@ export function ScraperLogConsole({
       try {
         const event = JSON.parse(message.data as string) as ScraperLogEvent;
         setEvents((current) => [...current, event]);
+        if (
+          onInterventionRef.current &&
+          event.level === "intervention" &&
+          event.step === "needs_input"
+        ) {
+          onInterventionRef.current(event);
+        }
       } catch {
         // ignore malformed frames
       }
