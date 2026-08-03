@@ -663,7 +663,7 @@ class BrandAnalysisService:
             ):
                 return "physical_beauty"
             return "unknown"
-        return max(scores, key=scores.get)
+        return max(scores.items(), key=lambda kv: kv[1])[0]
 
     def _dominant_domain(self, posts: list[PostSummary]) -> str:
         counts: dict[str, int] = {}
@@ -672,7 +672,7 @@ class BrandAnalysisService:
                 counts[post.domain] = counts.get(post.domain, 0) + 1
         if not counts:
             return "unknown"
-        return max(counts, key=counts.get)
+        return max(counts.items(), key=lambda kv: kv[1])[0]
 
     def _build_evidence_reference(
         self, post: PostSummary, field: str, excerpt: str, why_supports: str
@@ -848,8 +848,12 @@ class BrandAnalysisService:
         )
 
     def _build_evidence_chains(
-        self, organic_posts: list[PostSummary]
+        self,
+        organic_posts: list[PostSummary],
+        domain: str = "",
     ) -> list[EvidenceChain]:
+        if not domain:
+            domain = self._dominant_domain(organic_posts)
         tag_to_posts: dict[str, list[PostSummary]] = {}
         for post in organic_posts:
             for tag in post.semantic_tags:
@@ -858,36 +862,36 @@ class BrandAnalysisService:
         tag_meanings: dict[str, tuple[str, str, str, str]] = {
             "nature": (
                 "Doğal/organik unsurlar tekrar ediyor.",
-                "Marka doğayı bilimsel lüks ile birleştiren bir dünya kuruyor.",
-                "Doğal içerikler tüketiciye saflık ve şeffaflık hissi verir.",
+                "Marka doğallık ve şeffaflık dünyası kuruyor.",
+                "Doğal dil hedef kitleye saflık ve güven hissi verir.",
                 (
-                    "Kendi ürün ve içeriklerinizde benzersiz doğal köken "
-                    "veya yerel kaynağı öne çıkarın."
+                    "Kendi içeriklerinizde benzersiz doğal köken, yerel kaynak "
+                    "veya şeffaf süreçleri öne çıkarın."
                 ),
             ),
             "science": (
-                "Bilimsel/formül dili kullanılıyor.",
-                "Etkinlik vaadi güvenilirlik ve sonuç odaklılık yaratıyor.",
-                "Sonuç odaklı iletişim beklentiyi netleştirir.",
-                "Ürününüzün kanıtlanabilir etkinliğini görsel ve metinle birleştirin.",
+                "Sonuç, veri veya uzmanlık dili kullanılıyor.",
+                "Etkinlik vaadi güvenilirlik ve net beklenti yaratıyor.",
+                "Kanıt odaklı iletişim hedef kitleye güven verir.",
+                "Sunduğunuz değerin kanıtlanabilir etkinliğini görsel ve metinle birleştirin.",
             ),
             "ritual": (
-                "Rutin/ritüel anlatımı var.",
-                "Ürün kullanımı bir bakım ritüeline dönüşüyor.",
-                "Ritüeller duygusal sadakati ve tekrar kullanımı artırır.",
-                "Adım adım kullanım senaryoları oluşturun.",
+                "Rutin/adım/süreç anlatımı var.",
+                "Kullanım bir alışkanlık veya deneyim ritüeline dönüşüyor.",
+                "Tekrar edilebilir senaryolar bağlılığı ve tekrar kullanımı artırır.",
+                "İzleyiciye uygulanabilir bir adım veya rutin sunun.",
             ),
             "founder_authority": (
-                "Kurucu sesi ve kişisel hikaye öne çıkıyor.",
-                "Marka kurucu inandırıcılığı üzerinden güven inşa ediyor.",
-                "Kişisel hikaye markaya samimiyet ve misyon katıyor.",
+                "Kurucu/ekip sesi ve kişisel hikaye öne çıkıyor.",
+                "Marka kişisel ve otoriter bir ses kuruyor.",
+                "İnsan hikâyesi ve samimiyet güveni artırır.",
                 "Sahip/ekip hikayesini içeriklerinize yerleştirin.",
             ),
             "provenance": (
-                "Köken/çiftlik/üretim yeri vurgulanıyor.",
-                "Provenance şeffaflığı premium algıyı destekliyor.",
-                "Tüketici ürünün nereden geldiğini bilmek ister.",
-                "Tedarik ve üretim sürecinizi görselleştirin.",
+                "Köken/üretim/süreç yeri vurgulanıyor.",
+                "Köken şeffaflığı güven ve premium algıyı destekliyor.",
+                "Hedef kitle kaynağı ve süreci bilmek ister.",
+                "Tedarik, üretim veya süreç kökeninizi görselleştirin.",
             ),
             "sustainability": (
                 "Sürdürülebilirlik/eco mesajları var.",
@@ -896,28 +900,28 @@ class BrandAnalysisService:
                 "Ambalaj ve süreçlerdeki sürdürülebilir adımları paylaşın.",
             ),
             "sensory": (
-                "Duyusal detaylar (doku, koku) vurgulanıyor.",
-                "Duyusal dil ürünü somut ve arzulanabilir kılıyor.",
-                "Hissettirilebilir deneyim alım isteğini artırır.",
-                "Ürün dokusu, koku, renk ve uygulama anlarını yakın çekimle gösterin.",
+                "Duyusal detaylar (doku, malzeme, his) vurgulanıyor.",
+                "Duyusal dil vaadi somut ve arzulanabilir kılıyor.",
+                "Hissettirilebilir deneyim vaat inandırıcılığını artırır.",
+                "Doku, malzeme, renk veya uygulama anlarını yakından gösterin.",
             ),
             "luxury": (
-                "Lüks/premium dil ve görseller var.",
-                "Lüks kodlar markayı seçkin ve kaliteli konumlandırıyor.",
+                "Premium/lüks dil ve görseller var.",
+                "Premium kodlar markayı seçkin ve kaliteli konumlandırıyor.",
                 "Premium algı fiyat ve kalite beklentisini yükseltir.",
-                "Materyal, ambalaj ve ışık seçimlerinde sadelik ve kaliteyi öne çıkarın.",
+                "Kalite, detay, malzeme ve ışık seçimlerinde sadelik ve özeni öne çıkarın.",
             ),
             "community": (
                 "Topluluk/kullanıcı odaklı mesajlar var.",
                 "Topluluk dili katılım ve aidiyet yaratıyor.",
                 "Kullanıcı sesi güveni ve erişimi artırır.",
-                "Kullanıcı içeriği ve yorumları marka kanalında sergileyin.",
+                "Kullanıcı içeriği ve yorumlarını marka kanalında sergileyin.",
             ),
             "aspiration": (
-                "Yaşam tarzı/hayal dünyası kuruluyor.",
-                "Marka ürünü bir yaşam tarzının parçası olarak sunuyor.",
+                "Yaşam tarzı/başarı dünyası kuruluyor.",
+                "Marka sunduğu değeri bir yaşam tarzı veya hedef durumun parçası olarak sunuyor.",
                 "Aspirasyonel içerik takipçinin kendini görmesini sağlar.",
-                "Ürünü ideal bir yaşam tarzı sahnesinde konumlandırın.",
+                "Hedef kitlenizin arzuladığı senaryoyu somut içeriklere dönüştürün.",
             ),
         }
 
@@ -961,13 +965,17 @@ class BrandAnalysisService:
         return chains[:5]
 
     def _build_brand_world(
-        self, organic_posts: list[PostSummary]
+        self,
+        organic_posts: list[PostSummary],
+        domain: str = "",
     ) -> BrandWorldSynthesis:
         if not organic_posts:
             return BrandWorldSynthesis(
                 emotional_effect="Yeterli organik gönderi yok.",
                 confidence="low",
             )
+        if not domain:
+            domain = self._dominant_domain(organic_posts)
         visual_codes: list[str] = []
         verbal_codes: list[str] = []
         tag_counts: dict[str, int] = {}
@@ -992,27 +1000,18 @@ class BrandAnalysisService:
         top_tags = sorted(tag_counts.items(), key=lambda x: -x[1])[:5]
         top_tag_names = [tag for tag, _ in top_tags]
 
-        emotional_map: dict[str, str] = {
-            "nature": "doğal ferahlık",
-            "science": "güven veren etkinlik",
-            "ritual": "bakımın keyfi",
-            "founder_authority": "samimi inandırıcılık",
-            "provenance": "şeffaf güven",
-            "sustainability": "bilinçli seçim",
-            "sensory": "duyusal arzu",
-            "luxury": "seçkinlik",
-            "community": "aidiyet",
-            "aspiration": "yaşam tarzı özlemi",
-        }
         emotional_effect = "; ".join(
-            emotional_map.get(tag, tag) for tag in top_tag_names
+            self._EMOTIONAL_EFFECT_MAP.get(tag, tag) for tag in top_tag_names
         ) or "gözlenen veriye dayalı marka hissi belirsiz"
 
         lifestyle_context = " ".join(list(dict.fromkeys(lifestyle_fragments))[:3])
         premium_mechanism = ""
         if placement_fragments or proof_fragments:
+            proof_label = (
+                "Materyal kanıtı" if domain in self._PHYSICAL_DOMAINS else "Görsel kanıt"
+            )
             premium_mechanism = (
-                f"Materyal kanıtı: {', '.join(list(dict.fromkeys(proof_fragments))[:3])}. "
+                f"{proof_label}: {', '.join(list(dict.fromkeys(proof_fragments))[:3])}. "
                 f"Sahne konumlandırma: {'; '.join(list(dict.fromkeys(placement_fragments))[:2])}."
             ).strip()
 
@@ -1026,6 +1025,7 @@ class BrandAnalysisService:
             premium_mechanism=premium_mechanism,
             avoided_elements=[],
             confidence="medium" if len(organic_posts) >= 3 else "low",
+            domain=domain,
         )
 
     def _build_report_context(
@@ -1107,6 +1107,7 @@ class BrandAnalysisService:
             caption_summary = self._summarize_caption(caption_analysis)
             visual_summary = self._summarize_visual(visual_analysis)
             media_items = doc.get("media_items") or []
+            domain = self._infer_domain(caption, visual_analysis, visual_summary)
 
             if view_count:
                 engagement_rate = round(
@@ -1121,10 +1122,14 @@ class BrandAnalysisService:
                 engagement_comparable = False
                 confidence = "medium"
 
-            semantic_tags = self._extract_semantic_tags(caption, visual_analysis)
-            content_job = self._extract_content_job(caption, caption_analysis)
+            semantic_tags = self._extract_semantic_tags(
+                caption, visual_analysis, domain
+            )
+            content_job = self._extract_content_job(
+                caption, caption_analysis, domain
+            )
             premium_signals = self._extract_premium_signals(
-                caption, caption_analysis, visual_analysis
+                caption, caption_analysis, visual_analysis, domain
             )
             anomaly = self._detect_anomaly(caption, caption_analysis, visual_analysis)
 
@@ -1150,6 +1155,7 @@ class BrandAnalysisService:
                     anomaly_candidate=anomaly,
                     premium_signals=premium_signals,
                     confidence=confidence,
+                    domain=domain,
                 )
             )
 
@@ -1166,6 +1172,7 @@ class BrandAnalysisService:
         post_count = len(posts)
         organic_posts = [p for p in posts if not p.anomaly_candidate]
         anomaly_posts = [p for p in posts if p.anomaly_candidate]
+        dominant_domain = self._dominant_domain(organic_posts)
 
         if not total_views:
             data_quality_notes.append(
@@ -1254,7 +1261,9 @@ class BrandAnalysisService:
         performance_summary = self._build_performance_summary(
             posts, organic_posts, anomaly_posts, total_views
         )
-        semantic_observations = self._build_evidence_chains(organic_posts)
+        semantic_observations = self._build_evidence_chains(
+            organic_posts, dominant_domain
+        )
         if not semantic_observations:
             semantic_observations = [
                 EvidenceChain(
@@ -1284,7 +1293,7 @@ class BrandAnalysisService:
                     confidence="low",
                 )
             ]
-        brand_world = self._build_brand_world(organic_posts)
+        brand_world = self._build_brand_world(organic_posts, dominant_domain)
 
         return BrandAnalysisReportContext(
             job_id=job_id,

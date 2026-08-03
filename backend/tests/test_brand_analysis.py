@@ -965,3 +965,108 @@ def test_playwright_pdf_provider_falls_back_to_system_chrome(monkeypatch: Any) -
     assert fake_chromium.launch.call_count == 1
     launch_kwargs = fake_chromium.launch.call_args.kwargs
     assert launch_kwargs.get("executable_path") == "/usr/bin/google-chrome"
+
+
+@pytest.mark.anyio
+async def test_build_report_context_avoids_cosmetic_language_for_saas() -> None:
+    """Non-physical accounts must not be slotted into skincare/texture mechanics."""
+    from app.providers.brand_report import _fallback_brief_from_context
+
+    db = FakeDatabase()
+    service = _build_service(db, FakeBrandAnalysisProvider())
+
+    base_visual = {
+        "visual_signature": ["dashboard", "interface"],
+        "contextual_placement": "dashboard screenshot showing growth metric",
+        "sensory_visual_proof": ["growth metric shown on dashboard"],
+        "texture_descriptors": [],
+        "material_context": "browser window with clean sans-serif typography",
+        "aspirational_lifestyle_narrative": (
+            "a focused work session where the tool removes friction"
+        ),
+        "visual_hook": (
+            "a bold before/after metric on a dashboard "
+            "promising measurable results"
+        ),
+        "color_palette": ["navy_blue", "soft_gray"],
+        "lighting_type": "screen_glow",
+        "aesthetic_style": "minimalist_dashboard",
+        "composition_style": "interface_screenshot",
+        "shooting_angle": "screen_capture",
+        "confidence": 1,
+    }
+    base_caption_analysis = {
+        "content_job": "educate_with_lifestyle_context",
+        "premium_signals": ["authority", "education"],
+        "tone": "bilgilendirici",
+        "structure": "hook-fayda-cta",
+        "cta_type": "soru",
+        "keywords": ["ai", "instagram", "growth"],
+        "target_audience_hint": "sosyal medya yöneticileri",
+        "message_clarity_score": 8,
+    }
+
+    analyzed = [
+        {
+            "shortcode": "saas1",
+            "media_type": "IMAGE",
+            "permalink": "https://www.instagram.com/p/saas1/",
+            "caption": "AI tool that grows your Instagram. Save 10 hours a week.",
+            "like_count": 120,
+            "comment_count": 8,
+            "view_count": 0,
+            "share_count": 0,
+            "taken_at": utcnow(),
+            "caption_analysis": base_caption_analysis,
+            "visual_analysis": base_visual,
+        },
+        {
+            "shortcode": "saas2",
+            "media_type": "IMAGE",
+            "permalink": "https://www.instagram.com/p/saas2/",
+            "caption": "How we scaled 50 accounts with one automation workflow.",
+            "like_count": 95,
+            "comment_count": 6,
+            "view_count": 0,
+            "share_count": 0,
+            "taken_at": utcnow(),
+            "caption_analysis": base_caption_analysis,
+            "visual_analysis": base_visual,
+        },
+    ]
+
+    context = service._build_report_context("saas_job", "involo.tr", analyzed)
+
+    assert context.brand_world.domain == "saas_tech"
+    for post in context.posts:
+        assert post.domain == "saas_tech"
+        assert post.content_job == "educate_with_lifestyle_context"
+        assert "create_desire_through_texture_and_proof" not in post.content_job
+
+    # visual_codes come from sanitized premium signals, not raw model keywords
+    assert all(signal in {"authority", "education"} for signal in context.brand_world.visual_codes)
+
+    # Premium mechanism uses non-physical wording
+    assert "Görsel kanıt" in context.brand_world.premium_mechanism
+    assert "Materyal kanıtı" not in context.brand_world.premium_mechanism
+
+    cosmetic_terms = [
+        "cream", "dewy", "serum", "cilt", "skincare", "texture", "bottle", "jar",
+        "matte_skin", "duyusal arzu", "bakımın keyfi", "doğal ferahlık",
+    ]
+    report_blob = " ".join(
+        [
+            context.brand_world.emotional_effect,
+            context.brand_world.premium_mechanism,
+            *context.brand_world.visual_codes,
+            *context.brand_world.verbal_codes,
+        ]
+    ).lower()
+    assert not any(term in report_blob for term in cosmetic_terms)
+
+    brief = _fallback_brief_from_context(context)
+    assert brief.brand_world.domain == "saas_tech"
+    for series in brief.content_series:
+        assert "create_desire_through_texture_and_proof" not in series.content_jobs
+        assert "duyusal kanıt" not in series.execution_formula.lower()
+        assert series.base_category_type == "observed_pattern"

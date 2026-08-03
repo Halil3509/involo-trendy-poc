@@ -334,11 +334,34 @@ def _render_brief_to_markdown(
     return "\n".join(lines)
 
 
+def _dominant_domain_from_context(context: BrandAnalysisReportContext) -> str:
+    """Return the dominant inferred domain, falling back to a keyword heuristic."""
+    if context.brand_world and context.brand_world.domain:
+        return context.brand_world.domain
+    counts: dict[str, int] = {}
+    for post in context.posts:
+        if post.domain:
+            counts[post.domain] = counts.get(post.domain, 0) + 1
+    if counts:
+        return max(counts.items(), key=lambda kv: kv[1])[0]
+    text = " ".join(
+        f"{post.caption or ''} {post.visual_summary or ''}" for post in context.posts
+    ).lower()
+    if any(
+        kw in text
+        for kw in ["cilt", "krem", "serum", "beauty", "skincare", "makeup", "texture", "doku"]
+    ):
+        return "physical_beauty"
+    return "unknown"
+
+
 def _context_summary_for_prompt(context: BrandAnalysisReportContext) -> str:
     """Serialize a deterministic, LLM-readable summary of the report context."""
+    domain = _dominant_domain_from_context(context)
     lines: list[str] = [
         f"Hesap: @{context.target_username}",
         f"Örneklem: {context.post_count} gönderi",
+        f"Baskın alan: {domain}",
         f"Toplamlar: likes={context.total_likes}, comments={context.total_comments}, "
         f"views={context.total_views}, shares={context.total_shares}",
         f"Ortalamalar: likes={context.avg_likes:.2f}, comments={context.avg_comments:.2f}, "
@@ -504,23 +527,50 @@ def _fallback_brief_from_context(
         context.contextual_placement_frequency.items(), key=lambda x: -x[1]
     )[:4]
     total_posts = context.post_count or 1
+    domain = _dominant_domain_from_context(context)
+    physical = domain in {"physical_beauty", "fashion", "food", "fitness_lifestyle"}
     for placement, count in sorted_placements:
         pct = round(count / total_posts * 100, 1)
+        jobs = [
+            post.content_job
+            for post in context.posts
+            if post.content_job and placement in (post.visual_summary or "")
+        ]
+        if jobs:
+            top_job = max(set(jobs), key=jobs.count)
+        else:
+            top_job = (
+                "create_desire_through_texture_and_proof"
+                if physical
+                else "present_key_message"
+            )
+        base_type = "contextual_ritual" if physical else "observed_pattern"
+        if physical:
+            psychological_function = (
+                "Ürünü belirli bir ritüel veya ortama "
+                "yerleştirerek arzu ve aidiyet yaratır."
+            )
+            execution_formula = (
+                "Ürünü benzeri bir sahnede, duyusal kanıtla birlikte "
+                "konumlandır; caption'la yaşam tarzı vaadini pekiştir."
+            )
+        else:
+            psychological_function = (
+                "Somut bir fayda/kanıt senaryosuyla güven ve ilgi yaratır."
+            )
+            execution_formula = (
+                "Aynı senaryoyu kendi markanız için somut fayda, "
+                "bağlam ve net CTA ile yeniden üretin."
+            )
         content_series.append(
             ContentSeriesMechanic(
                 mechanic_name=f"Sahne: {placement[:60]}",
-                base_category_type="contextual_ritual",
+                base_category_type=base_type,
                 observed_frequency=count,
                 percentage_of_sample=pct,
-                psychological_function=(
-                    "Ürünü belirli bir ritüel veya ortama "
-                    "yerleştirerek arzu ve aidiyet yaratır."
-                ),
-                execution_formula=(
-                    "Ürünü benzeri bir sahnede, duyusal kanıtla birlikte "
-                    "konumlandır; caption'la yaşam tarzı vaadini pekiştir."
-                ),
-                content_jobs=["create_desire_through_texture_and_proof"],
+                psychological_function=psychological_function,
+                execution_formula=execution_formula,
+                content_jobs=[top_job],
                 sample_shortcodes=[],
                 evidence_excerpt=placement[:200],
                 confidence="low",
@@ -648,20 +698,20 @@ class BedrockBrandAnalysisReportProvider(BrandAnalysisReportProvider):
             "1. success_dna: Explicit triad —\n"
             "   - desire (Arzu): what the audience is invited to want, derived from repeated "
             "     lifestyle narratives and captions.\n"
-            "   - proof (Kanıt): the sensory/visible evidence that makes the promise credible, "
-            "     derived from sensory_visual_proof and material_context.\n"
-            "   - lifestyle (Yaşam Tarzı): the aspirational world the product lives inside, "
+            "   - proof (Kanıt): the visible or measured evidence that makes the promise credible, "
+            "     derived from sensory_visual_proof, material_context, and captions.\n"
+            "   - lifestyle (Yaşam Tarzı): the aspirational world the offering lives inside, "
             "     derived from contextual_placement and aspirational_lifestyle_narrative.\n"
             "2. brand_world: emotional_effect, brand_promise, persona, "
             "   lifestyle_context, premium_mechanism, avoided_elements — "
             "   derive from observed evidence, no templates.\n"
             "3. visual_dna: color_palette, lighting_recipe, texture_signatures, "
             "   shooting_angles, aesthetic_style, avoided_visual_elements — "
-            "   synthesize from visual_analysis fields.\n"
+            "   synthesize from visual_analysis fields, but only when relevant.\n"
             "4. persona_profile: age_range, lifestyle_descriptor, aspiration, "
             "   psychological_trigger, trigger_phrases — from caption_analysis.persona_triggers.\n"
             "5. content_series: 4-6 ContentSeriesMechanic objects. Each is a MECHANISM, not a "
-            "   category (e.g. 'Texture & Sensory Proof', 'Travel Ritual Companion', "
+            "   category (e.g. 'Value Proof & Social Signal', 'Workflow Demonstration', "
             "   'Before/After Tension & Relief'). Include base_category_type, observed_frequency, "
             "   percentage_of_sample, psychological_function, execution_formula, content_jobs, "
             "   sample_shortcodes, evidence_excerpt, confidence.\n"
@@ -670,6 +720,12 @@ class BedrockBrandAnalysisReportProvider(BrandAnalysisReportProvider):
             "7. evidence_chains and decisions: 3-5 decisions; each chain follows "
             "   observation → semantic meaning → preference hypothesis → adaptable principle → "
             "   strategic decision.\n\n"
+            "DOMAIN CONSTRAINT:\n"
+            "The dominant domain is given in the context summary. If it is saas_tech, "
+            "education, service, or community, do NOT frame the brand world as a physical "
+            "product ritual. Use terms such as 'value proof', 'workflow', 'user outcome', "
+            "'community signal' instead of 'texture', 'sensory proof', 'cream', 'serum', "
+            "'dewy skin', or 'bottle' unless those words literally appear in the evidence.\n\n"
             "CENTRAL QUESTION TO ANSWER in Turkish within the JSON fields:\n"
             "@{hedef} hangi marka dünyasını, hangi içerik mekanikleriyle kuruyor; "
             "müşteri markası bu dünyanın hangi özelliklerini beğenmiş olabilir; "
