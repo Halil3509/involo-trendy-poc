@@ -22,8 +22,8 @@ class ProviderRegionMismatchError(RuntimeError):
     pass
 
 
-def probe_result(ok: bool, reason: str) -> Probe:
-    return {"ok": ok, "reason": reason, "required": True}
+def probe_result(ok: bool, reason: str, *, required: bool = True) -> Probe:
+    return {"ok": ok, "reason": reason, "required": required}
 
 
 class ProviderReadinessProber:
@@ -229,13 +229,16 @@ class ProviderReadinessProber:
             client.get_foundation_model(modelIdentifier=identifier)
 
     async def _probe_meta(self, path: str | None, db: Any | None = None) -> Probe:
+        # Meta trend tokens are only required in production; staging can boot without
+        # a live token while still verifying app credentials are configured.
+        meta_required = self.settings.environment == "production"
         app_id = self.settings.effective_facebook_app_id
         app_secret = self.settings.effective_facebook_app_secret
         if not (path and app_id and app_secret):
-            return probe_result(False, "not_configured")
+            return probe_result(False, "not_configured", required=meta_required)
         token = await self._meta_access_token(db)
         if not token:
-            return probe_result(False, "not_configured")
+            return probe_result(False, "not_configured", required=meta_required)
         url = (
             f"https://graph.facebook.com/{self.settings.instagram_graph_api_version}"
             f"{path}"
@@ -244,7 +247,7 @@ class ProviderReadinessProber:
             try:
                 await self.graph_limiter.acquire()
             except Exception:
-                return probe_result(False, "throttled")
+                return probe_result(False, "throttled", required=meta_required)
         async with httpx.AsyncClient(
             timeout=self.settings.provider_readiness_timeout_seconds
         ) as client:
@@ -253,8 +256,8 @@ class ProviderReadinessProber:
                 params={"fields": "id", "access_token": token},
             )
         if response.is_success:
-            return probe_result(True, "ok")
-        return probe_result(False, _http_reason(response.status_code))
+            return probe_result(True, "ok", required=meta_required)
+        return probe_result(False, _http_reason(response.status_code), required=meta_required)
 
     async def _meta_access_token(self, db: Any | None = None) -> str | None:
         """Prefer the encrypted managed token, but fall back to settings."""
