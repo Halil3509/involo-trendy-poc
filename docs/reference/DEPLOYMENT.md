@@ -72,9 +72,11 @@ INVOLO_EMBEDDING_MEDIA_S3_REGION=us-east-1
 INVOLO_BEDROCK_GENERATION_REGION=us-east-1
 INVOLO_BEDROCK_EMBEDDING_REGION=us-east-1
 INVOLO_PROVIDER_READINESS_PROBES_ENABLED=true
+# Cross-region S3/Bedrock probes from eu-west-3 to us-east-1 need extra headroom.
+INVOLO_PROVIDER_READINESS_TIMEOUT_SECONDS=10
 ```
 
-Meta app credentials (`INVOLO_INSTAGRAM_APP_ID`, `INVOLO_INSTAGRAM_APP_SECRET`, etc.) are sourced from the Meta app dashboard and the existing server `.env`.
+Meta app credentials (`INVOLO_INSTAGRAM_APP_ID`, `INVOLO_INSTAGRAM_APP_SECRET`, etc.) are sourced from the Meta app dashboard and the existing server `.env`. A live Meta trend access token is **not** required for staging boot (`/health/ready` still passes), but it is required for production.
 
 ## AWS resources (staging)
 
@@ -98,15 +100,24 @@ Meta app credentials (`INVOLO_INSTAGRAM_APP_ID`, `INVOLO_INSTAGRAM_APP_SECRET`, 
 - `NEXT_PUBLIC_API_URL=https://trendy-staging.involo.co` for Production and Preview.
 - Meta app OAuth redirect URI: `https://trendy-staging.involo.co/api/v1/instagram/oauth/callback`.
 
+## DNS and Vercel handoff
+
+1. Create a `CNAME` record for `trendy-staging.involo.co` pointing to the ALB DNS name:
+   `involo-trendy-poc-staging-lb-1356221300.eu-west-3.elb.amazonaws.com`.
+2. In Vercel, set `NEXT_PUBLIC_API_URL=https://trendy-staging.involo.co` for Production and Preview.
+3. In the Meta app dashboard, set the OAuth redirect URI to `https://trendy-staging.involo.co/api/v1/instagram/oauth/callback`.
+
 ## Post-deploy checks
 
 ```bash
 # From any machine with the DNS record resolving
 curl -s https://trendy-staging.involo.co/health/live
+curl -s https://trendy-staging.involo.co/health/ready
 
 # On the server
 docker ps --filter name=involo
 curl -s http://localhost:8021/health/live
+curl -s http://localhost:8021/health/ready
 ```
 
 ## Rollback
