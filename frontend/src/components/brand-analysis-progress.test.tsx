@@ -15,11 +15,15 @@ function mockJob(state: string, counters = {}) {
 }
 
 describe("BrandAnalysisProgress", () => {
-  it("shows reporting phase label and 95 percent while generating the report", () => {
+  it("shows reporting phase label, percentage, and sets aria-valuetext", () => {
     render(<BrandAnalysisProgress job={mockJob("reporting")} />);
 
     expect(screen.getByText("Marka raporu hazırlanıyor")).toBeInTheDocument();
     expect(screen.getByText("%95")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuetext",
+      "%95 - Marka raporu hazırlanıyor"
+    );
   });
 
   it("shows finished label when analysis succeeded", () => {
