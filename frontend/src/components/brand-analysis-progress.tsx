@@ -91,6 +91,7 @@ export function BrandAnalysisProgress({
 }: BrandAnalysisProgressProps) {
   const state = job.state.toLowerCase();
   const percent = computePercent(job);
+  const phaseLabel = PHASE_LABELS[state] ?? state;
   const counters = job.counters ?? {};
   const fetched = Number(counters.fetched ?? 0);
   const analyzed = Number(counters.analyzed ?? 0);
@@ -137,6 +138,7 @@ export function BrandAnalysisProgress({
           aria-valuenow={percent}
           aria-valuemin={0}
           aria-valuemax={100}
+          aria-valuetext={`%${percent} - ${phaseLabel}`}
           aria-label="Brand analysis progress"
         >
           <div
