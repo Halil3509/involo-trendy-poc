@@ -804,6 +804,48 @@ def test_export_pdf_report_content_not_found() -> None:
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+def test_export_pdf_handles_provider_error_sanitized(monkeypatch: Any) -> None:
+    client = _brand_client(admin_role="admin")
+
+    class FailingPdfProvider(FakeBrandAnalysisPdfProvider):
+        async def export(
+            self,
+            job_id: str,
+            markdown_text: str,
+            target_username: str,
+        ) -> Any:
+            raise brand_pdf.BrandPdfProviderError(
+                "Internal error: Connection reset by peer at S3 /bucket/secret_path"
+            )
+
+    monkeypatch.setattr(
+        admin_brand_analysis,
+        "build_brand_analysis_pdf_provider",
+        lambda settings: FailingPdfProvider(),
+    )
+
+    job_id = "job_pdf_failing"
+    client.app.state.resources.db.job_runs.docs.append({
+        "task_id": job_id,
+        "kind": "brand_analysis",
+        "state": "succeeded",
+        "target_username": "markaadi",
+        "counters": {},
+        "created_at": "2024-01-01T00:00:00Z",
+    })
+    client.app.state.resources.db.brand_analysis_reports.docs.append({
+        "job_id": job_id,
+        "markdown_text": "# Rapor\n\nİçerik",
+        "report_s3_key": f"reports/brand/{job_id}/report.md",
+    })
+
+    response = client.get(f"/api/v1/admin/brand-analysis/reports/{job_id}/pdf")
+    assert response.status_code == 502
+    data = response.json()
+    assert data["detail"] == "Failed to generate brand analysis PDF"
+    assert "secret_path" not in data["detail"]
+
+
 def test_export_pdf_returns_generated_pdf(monkeypatch: Any) -> None:
     client = _brand_client(admin_role="admin")
     fake_pdf = FakeBrandAnalysisPdfProvider(

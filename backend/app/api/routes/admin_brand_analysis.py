@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 from urllib.parse import quote, urlparse
 from uuid import uuid4
@@ -26,6 +27,8 @@ from app.providers.brand_pdf import BrandPdfProviderError, build_brand_analysis_
 from app.schemas.brand_analysis import BrandAnalysisRequest
 from app.schemas.jobs import JobResponse
 from app.tasks import analyze_brand
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/brand-analysis", tags=["admin", "brand-analysis"])
 
@@ -214,7 +217,11 @@ async def export_brand_analysis_pdf(
             document.get("target_username") or document.get("requested_url") or task_id,
         )
     except BrandPdfProviderError as exc:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+        logger.error("Failed to export brand analysis PDF for job %s: %s", task_id, exc)
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Failed to generate brand analysis PDF",
+        ) from exc
 
     if report:
         await resources(request).db.brand_analysis_reports.update_one(
